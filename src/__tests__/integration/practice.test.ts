@@ -8,6 +8,7 @@ type PrismaMockArgs = { data: Record<string, unknown> };
 
 // Use vi.hoisted to ensure mocks are initialized before module imports
 const mocks = vi.hoisted(() => ({
+    mockProcessFsrsReview: vi.fn().mockResolvedValue(undefined),
     mockPrismaErrorItem: {
         findUnique: vi.fn(),
     },
@@ -18,6 +19,11 @@ const mocks = vi.hoisted(() => ({
     },
     mockAIService: {
         generateSimilarQuestion: vi.fn(),
+    },
+    mockFsrsCard: {
+        findUnique: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
     },
     mockSession: {
         user: {
@@ -30,11 +36,23 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // Mock Prisma client
-vi.mock('@/lib/prisma', () => ({
-    prisma: {
+vi.mock('@/lib/prisma', () => {
+    const delegates = {
         errorItem: mocks.mockPrismaErrorItem,
         practiceRecord: mocks.mockPrismaPracticeRecord,
-    },
+        fsrsCard: mocks.mockFsrsCard,
+    };
+    return {
+        prisma: {
+            ...delegates,
+            $transaction: vi.fn((fn: (tx: typeof delegates) => unknown) => fn(delegates)),
+        },
+    };
+});
+
+// Mock FSRS service — practice tests focus on record API, not FSRS internals
+vi.mock('@/lib/fsrs/service', () => ({
+    processFsrsReview: mocks.mockProcessFsrsReview,
 }));
 
 // Mock AI service
@@ -1101,6 +1119,224 @@ describe('/api/practice', () => {
             expect(firstData.id).toBe('review-record-dedup');
             expect(secondData.id).toBe('review-record-dedup');
             expect(mocks.mockPrismaPracticeRecord.create).toHaveBeenCalledTimes(1);
+        });
+
+        it('10秒内重复提交不应触发 FSRS 更新', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            const existingRecord = {
+                id: 'review-record-dedup',
+                userId: 'user-123',
+                errorItemId: 'error-item-1',
+                practiceType: 'ORIGINAL_REVIEW',
+                rating: 3,
+                durationSeconds: 60,
+                answerText: null,
+                answerImageUrl: null,
+                createdAt: new Date(Date.now() - 5000),
+            };
+            mocks.mockPrismaPracticeRecord.findFirst.mockResolvedValue(existingRecord);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+
+            // FSRS should NOT be updated for duplicates
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('TASK-004: FSRS integration in ORIGINAL_REVIEW', () => {
+        const mockOwnedErrorItem = {
+            userId: 'user-123',
+            subject: { name: '数学' },
+        };
+
+        beforeEach(() => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            mocks.mockPrismaPracticeRecord.findFirst.mockResolvedValue(null);
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: `record-fsrs-${Date.now()}`,
+                ...args.data,
+                createdAt: new Date(),
+            }));
+        });
+
+        it('ORIGINAL_REVIEW 第一次评分应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 120,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledTimes(1);
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-1',
+                3,
+                expect.anything(), // tx client
+            );
+        });
+
+        it('Rating 1 (Again) 应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 1,
+                    durationSeconds: 45,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-1',
+                1,
+                expect.anything(),
+            );
+        });
+
+        it('Rating 2 (Hard) 应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 2,
+                    durationSeconds: 90,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-1',
+                2,
+                expect.anything(),
+            );
+        });
+
+        it('Rating 4 (Easy) 应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 4,
+                    durationSeconds: 30,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-1',
+                4,
+                expect.anything(),
+            );
+        });
+
+        it('SIMILAR_QUESTION 不应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'error-item-1',
+                    practiceType: 'SIMILAR_QUESTION',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+
+        it('非法 rating 不应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 5,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(400);
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+
+        it('其他用户的 errorItemId 不应调用 processFsrsReview', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({ userId: 'other-user' });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-2',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(403);
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+
+        it('缺少 revealedAnswer 时不应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(400);
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
         });
     });
 });

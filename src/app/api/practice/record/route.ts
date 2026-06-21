@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { unauthorized, badRequest, forbidden, internalError } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
+import { processFsrsReview } from "@/lib/fsrs/service";
 
 const logger = createLogger('api:practice:record');
 const ORIGINAL_REVIEW = "ORIGINAL_REVIEW";
@@ -249,21 +250,27 @@ export async function POST(req: Request) {
                 return NextResponse.json(duplicateRecord);
             }
 
-            const record = await prisma.practiceRecord.create({
-                data: {
-                    userId,
-                    subject: errorItem.subject?.name || subject || null,
-                    difficulty: null,
-                    isCorrect: mapRatingToCorrectness(normalizedRating),
-                    errorItemId,
-                    practiceType: ORIGINAL_REVIEW,
-                    rating: normalizedRating,
-                    durationSeconds: normalizedDurationSeconds,
-                    usedHint: usedHint ?? null,
-                    independent: independent ?? null,
-                    answerText: normalizedAnswerText,
-                    answerImageUrl: normalizedAnswerImageUrl,
-                },
+            const [record] = await prisma.$transaction(async (tx) => {
+                const created = await tx.practiceRecord.create({
+                    data: {
+                        userId,
+                        subject: errorItem.subject?.name || subject || null,
+                        difficulty: null,
+                        isCorrect: mapRatingToCorrectness(normalizedRating),
+                        errorItemId,
+                        practiceType: ORIGINAL_REVIEW,
+                        rating: normalizedRating,
+                        durationSeconds: normalizedDurationSeconds,
+                        usedHint: usedHint ?? null,
+                        independent: independent ?? null,
+                        answerText: normalizedAnswerText,
+                        answerImageUrl: normalizedAnswerImageUrl,
+                    },
+                });
+
+                await processFsrsReview(userId, errorItemId, normalizedRating, tx);
+
+                return [created];
             });
 
             return NextResponse.json(record);

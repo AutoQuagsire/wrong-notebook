@@ -1,21 +1,29 @@
 import { prisma } from "@/lib/prisma";
-import { createNewCard } from "./adapter";
+import { createNewCard, computeNextCard, validateFsrsRating } from "./adapter";
 import type { FsrsCardData } from "./adapter";
+import type { PrismaClient } from "@prisma/client";
+
+type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
 /**
  * Get or create an FsrsCard for a given error item and user.
  * If no card exists, creates a new one in "New" state.
+ * Accepts an optional transaction client for use within Prisma.$transaction.
  */
 export async function getOrCreateFsrsCard(
     userId: string,
     errorItemId: string,
-): Promise<FsrsCardData> {
-    const existing = await prisma.fsrsCard.findUnique({
+    tx?: PrismaTx,
+): Promise<FsrsCardData & { id: string }> {
+    const client = tx ?? prisma;
+
+    const existing = await client.fsrsCard.findUnique({
         where: { errorItemId },
     });
 
     if (existing) {
         return {
+            id: existing.id,
             due: existing.due,
             stability: existing.stability,
             difficulty: existing.difficulty,
@@ -30,7 +38,7 @@ export async function getOrCreateFsrsCard(
 
     const newCard = createNewCard();
 
-    const created = await prisma.fsrsCard.create({
+    const created = await client.fsrsCard.create({
         data: {
             userId,
             errorItemId,
@@ -47,6 +55,7 @@ export async function getOrCreateFsrsCard(
     });
 
     return {
+        id: created.id,
         due: created.due,
         stability: created.stability,
         difficulty: created.difficulty,
@@ -62,9 +71,11 @@ export async function getOrCreateFsrsCard(
 /**
  * Save an FsrsCardData back to the database.
  * Used after computing the next card state.
+ * Accepts an optional transaction client.
  */
-export async function saveFsrsCard(cardId: string, card: FsrsCardData): Promise<void> {
-    await prisma.fsrsCard.update({
+export async function saveFsrsCard(cardId: string, card: FsrsCardData, tx?: PrismaTx): Promise<void> {
+    const client = tx ?? prisma;
+    await client.fsrsCard.update({
         where: { id: cardId },
         data: {
             due: card.due,
@@ -91,4 +102,38 @@ export async function getFsrsCardId(errorItemId: string): Promise<string | null>
     });
 
     return card?.id ?? null;
+}
+
+/**
+ * Process an original review for FSRS: get or create the FsrsCard,
+ * compute the next state based on the rating, and persist the update.
+ *
+ * Must be called within an ORIGINAL_REVIEW scoring flow.
+ * Accepts an optional transaction client — when provided, all DB
+ * operations use that client so the caller can wrap this together
+ * with PracticeRecord creation in a single Prisma.$transaction.
+ *
+ * @throws if rating is invalid (not 1-4)
+ */
+export async function processFsrsReview(
+    userId: string,
+    errorItemId: string,
+    rating: number,
+    tx?: PrismaTx,
+): Promise<FsrsCardData> {
+    // Validate rating before doing any DB work
+    validateFsrsRating(rating);
+
+    const now = new Date();
+
+    // Get or create the card (within tx if provided)
+    const card = await getOrCreateFsrsCard(userId, errorItemId, tx);
+
+    // Compute next state (pure function, no DB)
+    const nextCard = computeNextCard(card, rating, now);
+
+    // Persist the update
+    await saveFsrsCard(card.id, nextCard, tx);
+
+    return nextCard;
 }

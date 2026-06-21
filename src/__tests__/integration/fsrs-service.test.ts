@@ -23,7 +23,7 @@ vi.mock("@/lib/prisma", () => ({
     },
 }));
 
-import { getOrCreateFsrsCard, saveFsrsCard, getFsrsCardId } from "@/lib/fsrs/service";
+import { getOrCreateFsrsCard, saveFsrsCard, getFsrsCardId, processFsrsReview } from "@/lib/fsrs/service";
 
 describe("FSRS Service", () => {
     const userId = "user-123";
@@ -143,6 +143,87 @@ describe("FSRS Service", () => {
             const id = await getFsrsCardId(errorItemId);
 
             expect(id).toBeNull();
+        });
+    });
+
+    describe("processFsrsReview", () => {
+        it("第一次调用应创建 FsrsCard", async () => {
+            mocks.mockFsrsCard.findUnique.mockResolvedValue(null);
+            mocks.mockFsrsCard.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+                id: "card-new",
+                ...args.data,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }));
+            mocks.mockFsrsCard.update.mockResolvedValue({});
+
+            const result = await processFsrsReview(userId, errorItemId, 3);
+
+            // Should have created a card (findUnique returned null)
+            expect(mocks.mockFsrsCard.create).toHaveBeenCalled();
+            // Should have updated with computed state
+            expect(mocks.mockFsrsCard.update).toHaveBeenCalled();
+            // Result state should be set
+            expect(result.state).toBeDefined();
+            expect(result.due).toBeInstanceOf(Date);
+            expect(result.reps).toBeGreaterThan(0);
+        });
+
+        it("后续调用应更新同一个 FsrsCard，不重复创建", async () => {
+            // First, let processFsrsReview create a card with real FSRS state
+            mocks.mockFsrsCard.findUnique.mockResolvedValue(null);
+            mocks.mockFsrsCard.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+                id: "card-real",
+                ...args.data,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }));
+            mocks.mockFsrsCard.update.mockResolvedValue({});
+
+            const firstResult = await processFsrsReview(userId, errorItemId, 3);
+            expect(mocks.mockFsrsCard.create).toHaveBeenCalled();
+            const firstReps = firstResult.reps;
+
+            // Now simulate second review — findUnique returns the updated card
+            mocks.mockFsrsCard.findUnique.mockResolvedValue({
+                id: "card-real",
+                userId,
+                errorItemId,
+                ...firstResult,
+                due: new Date(firstResult.due),
+                last_review: firstResult.last_review ? new Date(firstResult.last_review) : null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+            mocks.mockFsrsCard.create.mockClear();
+            mocks.mockFsrsCard.update.mockClear();
+
+            const secondResult = await processFsrsReview(userId, errorItemId, 4);
+
+            // Should NOT create a second card
+            expect(mocks.mockFsrsCard.create).not.toHaveBeenCalled();
+            // Should update the same card
+            expect(mocks.mockFsrsCard.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: "card-real" },
+                })
+            );
+            // Reps should increase
+            expect(secondResult.reps).toBeGreaterThan(firstReps);
+            // Due should be updated to a future date
+            expect(secondResult.due.getTime()).toBeGreaterThan(firstResult.due.getTime());
+        });
+
+        it("非法 rating 应抛出错误", async () => {
+            await expect(
+                processFsrsReview(userId, errorItemId, 5)
+            ).rejects.toThrow("Invalid rating");
+        });
+
+        it("null rating 应抛出错误", async () => {
+            await expect(
+                processFsrsReview(userId, errorItemId, null as unknown as number)
+            ).rejects.toThrow("Rating is required");
         });
     });
 });
