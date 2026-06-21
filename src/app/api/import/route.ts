@@ -75,6 +75,13 @@ interface ImportData {
         subject: string | null;
         difficulty: string | null;
         isCorrect: boolean | null;
+        errorItemId?: string | null;
+        practiceType?: string | null;
+        rating?: number | null;
+        durationSeconds?: number | null;
+        usedHint?: boolean | null;
+        independent?: boolean | null;
+        answerText?: string | null;
         createdAt: string;
     }>;
 }
@@ -112,7 +119,7 @@ export async function POST(req: Request) {
     const importAll = searchParams.get('all') === 'true';
 
     // 只有管理员可以导入全部数据
-    if (importAll && (session.user as any).role !== 'admin') {
+    if (importAll && session.user.role !== 'admin') {
         return forbidden("Admin role required");
     }
 
@@ -328,12 +335,42 @@ export async function POST(req: Request) {
             // 6. 导入 practice records
             for (const record of (body.practiceRecords || [])) {
                 const targetUserId = importAll ? record.userId : user.id;
+
+                // 验证 errorItemId：如果存在，必须映射到当前用户拥有的错题
+                let newErrorItemId: string | null = null;
+                if (record.errorItemId) {
+                    // 尝试通过已导入的 ID 映射查找
+                    if (errorItemIdMap.has(record.errorItemId)) {
+                        newErrorItemId = errorItemIdMap.get(record.errorItemId)!;
+                    } else {
+                        // 可能是一个外部导入的 ID，检查它是否属于当前用户的已有错题
+                        const existingItem = await tx.errorItem.findFirst({
+                            where: {
+                                id: record.errorItemId,
+                                userId: targetUserId,
+                            },
+                            select: { id: true },
+                        });
+                        if (existingItem) {
+                            newErrorItemId = existingItem.id;
+                        }
+                        // 如果找不到对应的错题，跳过 errorItemId（不关联无效 ID）
+                    }
+                }
+
                 await tx.practiceRecord.create({
                     data: {
                         userId: targetUserId,
                         subject: record.subject,
                         difficulty: record.difficulty,
                         isCorrect: record.isCorrect,
+                        errorItemId: newErrorItemId,
+                        practiceType: record.practiceType || "SIMILAR_QUESTION",
+                        rating: record.rating ?? null,
+                        durationSeconds: record.durationSeconds ?? null,
+                        usedHint: record.usedHint ?? null,
+                        independent: record.independent ?? null,
+                        answerText: record.answerText ?? null,
                         createdAt: safeParseDate(record.createdAt),
                     },
                 });

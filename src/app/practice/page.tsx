@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, RefreshCw, CheckCircle, Eye, Send, XCircle, ArrowLeft, House } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle, Send, XCircle, ArrowLeft, House } from "lucide-react";
 import { ParsedQuestion } from "@/lib/ai/types";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Textarea } from "@/components/ui/textarea";
@@ -70,9 +70,10 @@ function PracticeContent() {
                 difficulty
             }, { timeout });
             setQuestion(data);
-        } catch (error: any) {
-            console.error(error);
-            const msg = error.data?.message || "";
+        } catch (error: unknown) {
+            const apiErr = error as { data?: { message?: string }; message?: string; status?: number };
+            console.error(apiErr);
+            const msg = apiErr.data?.message || "";
 
             let errorMessage = t.practice.errors?.default || "Failed to generate";
 
@@ -121,7 +122,10 @@ function PracticeContent() {
         apiClient.post("/api/practice/record", {
             subject: question.subject || "Unknown",
             difficulty,
-            isCorrect: isMatch
+            isCorrect: isMatch,
+            errorItemId: errorItemId || undefined,
+            practiceType: "SIMILAR_QUESTION",
+            answerText: userAnswer || undefined,
         }).catch(err => console.error("Failed to save practice record:", err));
     };
 
@@ -168,7 +172,7 @@ function PracticeContent() {
                                 ].map((level) => (
                                     <button
                                         key={level.value}
-                                        onClick={() => setDifficulty(level.value as any)}
+                                        onClick={() => setDifficulty(level.value as "easy" | "medium" | "hard" | "harder")}
                                         className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${difficulty === level.value
                                             ? level.color.replace("bg-", "bg-opacity-100 bg-").replace("text-", "ring-2 ring-offset-1 ring-")
                                             : "bg-transparent hover:bg-muted text-muted-foreground"
@@ -206,7 +210,7 @@ function PracticeContent() {
                                 <div className="flex items-center gap-2">
                                     <select
                                         value={difficulty}
-                                        onChange={(e) => setDifficulty(e.target.value as any)}
+                                        onChange={(e) => setDifficulty(e.target.value as "easy" | "medium" | "hard" | "harder")}
                                         className="h-8 text-xs border rounded px-2 bg-background"
                                         disabled={loading}
                                     >

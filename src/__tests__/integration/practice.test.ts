@@ -4,6 +4,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+type PrismaMockArgs = { data: Record<string, unknown> };
+
 // Use vi.hoisted to ensure mocks are initialized before module imports
 const mocks = vi.hoisted(() => ({
     mockPrismaErrorItem: {
@@ -377,6 +379,10 @@ describe('/api/practice', () => {
     });
 
     describe('POST /api/practice/record (记录练习结果)', () => {
+        const mockOwnedErrorItem = {
+            userId: 'user-123',
+        };
+
         it('应该成功记录正确的练习结果', async () => {
             const createdRecord = {
                 id: 'record-1',
@@ -406,7 +412,7 @@ describe('/api/practice', () => {
             expect(data.isCorrect).toBe(true);
         });
 
-        it('应该成功记录错误的练习结果', async () => {
+        it('应该成功记录错误答案', async () => {
             const createdRecord = {
                 id: 'record-2',
                 userId: 'user-123',
@@ -485,7 +491,7 @@ describe('/api/practice', () => {
             vi.mocked(getServerSession).mockResolvedValue({
                 user: undefined,
                 expires: '2025-12-31',
-            } as any);
+            } as unknown as import('next-auth').Session);
 
             const request = new Request('http://localhost/api/practice/record', {
                 method: 'POST',
@@ -524,6 +530,199 @@ describe('/api/practice', () => {
 
             expect(response.status).toBe(500);
             expect(data.message).toBe('Failed to save record');
+        });
+
+        // === New tests for errorItemId tracking ===
+
+        it('应该成功保存带有 errorItemId 的练习记录', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            const createdRecord = {
+                id: 'record-ei-1',
+                userId: 'user-123',
+                subject: '数学',
+                difficulty: 'medium',
+                isCorrect: true,
+                errorItemId: 'error-item-1',
+                practiceType: 'SIMILAR_QUESTION',
+                answerText: 'x = 5',
+                createdAt: new Date(),
+            };
+            mocks.mockPrismaPracticeRecord.create.mockResolvedValue(createdRecord);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'error-item-1',
+                    practiceType: 'SIMILAR_QUESTION',
+                    answerText: 'x = 5',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.errorItemId).toBe('error-item-1');
+            expect(data.practiceType).toBe('SIMILAR_QUESTION');
+            expect(data.answerText).toBe('x = 5');
+        });
+
+        it('保存的 PracticeRecord 应该包含 errorItemId 字段', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'record-check-1',
+                ...args.data,
+                createdAt: new Date(),
+            }));
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '物理',
+                    difficulty: 'hard',
+                    isCorrect: false,
+                    errorItemId: 'error-item-42',
+                    practiceType: 'SIMILAR_QUESTION',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.errorItemId).toBe('error-item-42');
+            expect(data.practiceType).toBe('SIMILAR_QUESTION');
+
+            // Verify create was called with correct fields
+            expect(mocks.mockPrismaPracticeRecord.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        errorItemId: 'error-item-42',
+                        practiceType: 'SIMILAR_QUESTION',
+                        rating: null,
+                        durationSeconds: null,
+                    }),
+                })
+            );
+        });
+
+        it('应该拒绝其他用户的 errorItemId', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'other-user-999',
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'other-user-item',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(403);
+            expect(data.message).toBe("Cannot record practice for another user's error item");
+        });
+
+        it('应该返回 400 当 errorItemId 对应的错题不存在', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(null);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'non-existent-item',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('Error item not found');
+        });
+
+        it('不传 errorItemId 的旧请求仍兼容', async () => {
+            // No errorItem.findUnique should be called
+            mocks.mockPrismaErrorItem.findUnique.mockReset();
+            const createdRecord = {
+                id: 'record-legacy',
+                userId: 'user-123',
+                subject: '数学',
+                difficulty: 'easy',
+                isCorrect: true,
+                errorItemId: null,
+                practiceType: 'SIMILAR_QUESTION',
+                createdAt: new Date(),
+            };
+            mocks.mockPrismaPracticeRecord.create.mockResolvedValue(createdRecord);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'easy',
+                    isCorrect: true,
+                    // No errorItemId — legacy request
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.errorItemId).toBeNull();
+            expect(data.practiceType).toBe('SIMILAR_QUESTION');
+            // Should not have tried to look up an errorItem
+            expect(mocks.mockPrismaErrorItem.findUnique).not.toHaveBeenCalled();
+        });
+
+        it('应该保存额外的可选字段 (rating, durationSeconds, usedHint, independent)', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'record-full',
+                ...args.data,
+                createdAt: new Date(),
+            }));
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'error-item-1',
+                    practiceType: 'SIMILAR_QUESTION',
+                    rating: 4,
+                    durationSeconds: 120,
+                    usedHint: false,
+                    independent: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.rating).toBe(4);
+            expect(data.durationSeconds).toBe(120);
+            expect(data.usedHint).toBe(false);
+            expect(data.independent).toBe(true);
         });
     });
 });

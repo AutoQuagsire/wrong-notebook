@@ -114,6 +114,7 @@ model ErrorItem {
   updatedAt        DateTime @updatedAt
 
   reviewSchedules ReviewSchedule[]
+  practiceRecords PracticeRecord[]
 }
 
 model ReviewSchedule {
@@ -132,10 +133,22 @@ model PracticeRecord {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   subject   String?  // e.g. "Math", "Physics"
   difficulty String? // "easy", "medium", "hard", "harder"
   isCorrect Boolean?
-  
+
+  // New fields for traceability and extended tracking
+  errorItemId   String?   // Links practice to specific ErrorItem
+  errorItem     ErrorItem? @relation(fields: [errorItemId], references: [id], onDelete: SetNull)
+  practiceType  String    @default("SIMILAR_QUESTION") // "SIMILAR_QUESTION", "ORIGINAL_REVIEW", etc.
+  rating        Int?      // FSRS rating: 1=Again, 2=Hard, 3=Good, 4=Easy
+  durationSeconds Int?    // Time taken to answer
+  usedHint      Boolean?  // Whether hints were used
+  independent   Boolean?  // Whether solved independently
+  answerText    String?   // User's submitted answer text
+
   createdAt DateTime @default(now())
+
+  @@index([errorItemId, createdAt])
 }
