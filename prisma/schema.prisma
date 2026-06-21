@@ -28,6 +28,7 @@ model User {
   errorItems ErrorItem[]
   subjects   Subject[]
   practiceRecords PracticeRecord[]
+  fsrsCards  FsrsCard[]
   customTags KnowledgeTag[] // User's custom tags
 }
 
@@ -115,6 +116,7 @@ model ErrorItem {
 
   reviewSchedules ReviewSchedule[]
   practiceRecords PracticeRecord[]
+  fsrsCard        FsrsCard?
 }
 
 model ReviewSchedule {
@@ -152,4 +154,29 @@ model PracticeRecord {
   createdAt DateTime @default(now())
 
   @@index([errorItemId, createdAt])
+}
+
+model FsrsCard {
+  id            String   @id @default(cuid())
+  userId        String
+  errorItemId   String   @unique
+
+  due           DateTime @default(now())
+  stability     Float?
+  difficulty    Float?
+  elapsed_days  Int      @default(0)
+  scheduled_days Int     @default(0)
+  reps          Int      @default(0)
+  lapses        Int      @default(0)
+  state         String   @default("New")
+  last_review   DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  errorItem ErrorItem @relation(fields: [errorItemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, due])
+  @@index([errorItemId])
 }
