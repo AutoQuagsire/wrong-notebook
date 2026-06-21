@@ -113,9 +113,10 @@ export default function ErrorDetailPage() {
             } else {
                 setGeogebraError(result.description || "该题目不适合用 GeoGebra 演示");
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("GeoGebra analysis failed:", error);
-            const msg = error?.data?.message || error?.message || "";
+            const apiError = error as { data?: { message?: string }; message?: string };
+            const msg = apiError?.data?.message || apiError?.message || "";
             if (msg.includes("AI_AUTH_ERROR")) {
                 setGeogebraError("AI 认证失败，请检查设置");
             } else if (msg.includes("AI_CONNECTION")) {
@@ -424,6 +425,12 @@ export default function ErrorDetailPage() {
                     </div>
 
                     <div className="flex gap-2">
+                        <Link href={`/review/${item.id}`}>
+                            <Button variant="outline" size="sm">
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                复习原题
+                            </Button>
+                        </Link>
                         <Link href={`/practice?id=${item.id}`}>
                             <Button variant="outline" size="sm">
                                 <RefreshCw className="mr-2 h-4 w-4" />

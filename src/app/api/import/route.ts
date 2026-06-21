@@ -82,6 +82,7 @@ interface ImportData {
         usedHint?: boolean | null;
         independent?: boolean | null;
         answerText?: string | null;
+        answerImageUrl?: string | null;
         createdAt: string;
     }>;
 }
@@ -371,6 +372,7 @@ export async function POST(req: Request) {
                         usedHint: record.usedHint ?? null,
                         independent: record.independent ?? null,
                         answerText: record.answerText ?? null,
+                        answerImageUrl: record.answerImageUrl ?? null,
                         createdAt: safeParseDate(record.createdAt),
                     },
                 });

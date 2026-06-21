@@ -112,6 +112,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
         usedHint: true,
         independent: false,
         answerText: 'F = ma = 10',
+        answerImageUrl: 'data:image/jpeg;base64,answer-photo',
         createdAt: new Date('2025-06-15T10:30:00Z'),
     };
 
@@ -132,6 +133,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
             expect(exported.usedHint).toBe(true);
             expect(exported.independent).toBe(false);
             expect(exported.answerText).toBe('F = ma = 10');
+            expect(exported.answerImageUrl).toBe('data:image/jpeg;base64,answer-photo');
         });
 
         it('导出应包含旧记录（errorItemId 为 null）', async () => {
@@ -148,6 +150,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
                 usedHint: null,
                 independent: null,
                 answerText: null,
+                answerImageUrl: null,
                 createdAt: new Date('2025-01-01T00:00:00Z'),
             };
             mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([legacyRecord]);
@@ -160,6 +163,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
             const exported = data.practiceRecords[0];
             expect(exported.errorItemId).toBeNull();
             expect(exported.practiceType).toBe('SIMILAR_QUESTION');
+            expect(exported.answerImageUrl).toBeNull();
         });
     });
 
@@ -224,6 +228,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
                         usedHint: true,
                         independent: false,
                         answerText: 'F = ma = 10',
+                        answerImageUrl: 'data:image/jpeg;base64,answer-photo',
                         createdAt: '2025-06-15T10:30:00Z',
                     },
                 ],
@@ -253,6 +258,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
             expect(createCallArgs.data.usedHint).toBe(true);
             expect(createCallArgs.data.independent).toBe(false);
             expect(createCallArgs.data.answerText).toBe('F = ma = 10');
+            expect(createCallArgs.data.answerImageUrl).toBe('data:image/jpeg;base64,answer-photo');
         });
 
         it('导入旧格式（无新字段）应有效', async () => {
@@ -313,6 +319,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
                         usedHint: null,
                         independent: null,
                         answerText: null,
+                        answerImageUrl: null,
                     }),
                 })
             );
@@ -396,6 +403,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
             expect(exported.usedHint).toBe(true);
             expect(exported.independent).toBe(false);
             expect(exported.answerText).toBe('F = ma = 10');
+            expect(exported.answerImageUrl).toBe('data:image/jpeg;base64,answer-photo');
 
             // Step 3: Import the exported data
             mocks.mockPrismaPracticeRecord.findMany.mockReset();
@@ -434,6 +442,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
                         usedHint: true,
                         independent: false,
                         answerText: 'F = ma = 10',
+                        answerImageUrl: 'data:image/jpeg;base64,answer-photo',
                     }),
                 })
             );

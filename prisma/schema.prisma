@@ -147,6 +147,7 @@ model PracticeRecord {
   usedHint      Boolean?  // Whether hints were used
   independent   Boolean?  // Whether solved independently
   answerText    String?   // User's submitted answer text
+  answerImageUrl String?  // Optional handwritten answer image (Base64/Data URL)
 
   createdAt DateTime @default(now())
 

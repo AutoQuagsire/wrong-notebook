@@ -166,6 +166,7 @@ export interface PracticeRecordData {
     usedHint?: boolean | null;
     independent?: boolean | null;
     answerText?: string | null;
+    answerImageUrl?: string | null;
     createdAt: string;
 }
 
