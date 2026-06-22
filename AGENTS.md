@@ -30,19 +30,29 @@
 ## 4. Review & FSRS Rules
 
 - 四级评分：1=Again 2=Hard 3=Good 4=Easy。`isCorrect` 只是兼容统计字段。
-- FSRS 必须通过独立适配层接入，页面和 API 不得直接散落调用 FSRS 第三方库。
-- 第一版只允许 `ORIGINAL_REVIEW` 驱动 FSRS，相似题练习可参与统计但不直接改变 FSRS 状态。
+- FSRS 通过独立适配层 (`src/lib/fsrs/adapter.ts` → `service.ts`) 接入，页面和 API 不得直接散落调用 FSRS 第三方库。
+- 只有 `ORIGINAL_REVIEW` 驱动 FSRS 状态更新。`SIMILAR_QUESTION` 可参与统计但不直接改变 FSRS 状态。
 - 复习页默认隐藏答案/解析/错因/历史作答，只有点击"查看答案"后才显示。
+- 任何 ORIGINAL_REVIEW 保存后，如果 FSRS 算出的 due 仍在当天，则钳制到次日 06:00。错题复习按天调度。
+- `ReviewSchedule` 表暂不接入复习流程。
+- `masteryLevel` 暂不由一次练习自动更新。
 
 ## 5. Current Scope Boundaries
 
+**已完成（v1.x）：**
+- `ts-fsrs` 接入与 FSRS 适配层
+- 今日复习页面 (`/review/today`) + API (`GET /api/review/today`)
+- 原题复习评分 + FSRS 更新 (`POST /api/practice/record` with `practiceType=ORIGINAL_REVIEW`)
+- 保存后显示下次复习日期 (`reviewResult.nextReviewAt`)
+- 同日 due 钳制到次日 06:00
+- 未来 7 天复习预览（按钮 + Dialog 弹窗）
+
 **当前阶段禁止：**
 - 接入或扩展 `ReviewSchedule` 作为新复习系统
-- 接入 FSRS 第三方库（`ts-fsrs` 等）
-- 创建 DailyPlan / 每日任务页面
 - 让 AI 直接决定每日选题或自动判定复杂数学推导题正确
 - 让 AI 相似题练习直接驱动第一版 FSRS
 - 教材知识卡、双模型 Provider 架构、图片存储迁移
+- 提醒通知、统计大屏、复杂日历组件
 
 ## 6. Data Safety
 
