@@ -358,7 +358,7 @@ describe("GET /api/review/today", () => {
 
     describe("question preview", () => {
         it("应截断过长题目", async () => {
-            const longText = "A".repeat(200);
+            const longText = "A".repeat(400);
             mocks.mockFsrsCard.findMany.mockResolvedValue([
                 {
                     id: "card-1",
@@ -385,7 +385,7 @@ describe("GET /api/review/today", () => {
             const data = await res.json();
 
             const preview = data.dueItems[0].questionPreview;
-            expect(preview.length).toBeLessThan(200);
+            expect(preview.length).toBeLessThanOrEqual(301); // 300 + "…"
             expect(preview.endsWith("…")).toBe(true);
         });
 

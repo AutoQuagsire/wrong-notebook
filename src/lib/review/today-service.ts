@@ -3,7 +3,7 @@ import type { ReviewTodayItem, ReviewTodayResponse } from "@/types/api";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-const QUESTION_PREVIEW_MAX = 120;
+const QUESTION_PREVIEW_MAX = 300;
 
 function buildQuestionPreview(
     questionText?: string | null,
