@@ -28,6 +28,7 @@ model User {
   errorItems ErrorItem[]
   subjects   Subject[]
   practiceRecords PracticeRecord[]
+  fsrsCards  FsrsCard[]
   customTags KnowledgeTag[] // User's custom tags
 }
 
@@ -114,6 +115,8 @@ model ErrorItem {
   updatedAt        DateTime @updatedAt
 
   reviewSchedules ReviewSchedule[]
+  practiceRecords PracticeRecord[]
+  fsrsCard        FsrsCard?
 }
 
 model ReviewSchedule {
@@ -132,10 +135,48 @@ model PracticeRecord {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   subject   String?  // e.g. "Math", "Physics"
   difficulty String? // "easy", "medium", "hard", "harder"
   isCorrect Boolean?
-  
+
+  // New fields for traceability and extended tracking
+  errorItemId   String?   // Links practice to specific ErrorItem
+  errorItem     ErrorItem? @relation(fields: [errorItemId], references: [id], onDelete: SetNull)
+  practiceType  String    @default("SIMILAR_QUESTION") // "SIMILAR_QUESTION", "ORIGINAL_REVIEW", etc.
+  rating        Int?      // FSRS rating: 1=Again, 2=Hard, 3=Good, 4=Easy
+  durationSeconds Int?    // Time taken to answer
+  usedHint      Boolean?  // Whether hints were used
+  independent   Boolean?  // Whether solved independently
+  answerText    String?   // User's submitted answer text
+  answerImageUrl String?  // Optional handwritten answer image (Base64/Data URL)
+
   createdAt DateTime @default(now())
+
+  @@index([errorItemId, createdAt])
+}
+
+model FsrsCard {
+  id            String   @id @default(cuid())
+  userId        String
+  errorItemId   String   @unique
+
+  due           DateTime @default(now())
+  stability     Float?
+  difficulty    Float?
+  elapsed_days  Int      @default(0)
+  scheduled_days Int     @default(0)
+  reps          Int      @default(0)
+  lapses        Int      @default(0)
+  state         String   @default("New")
+  last_review   DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  errorItem ErrorItem @relation(fields: [errorItemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, due])
+  @@index([errorItemId])
 }

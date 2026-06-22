@@ -155,7 +155,7 @@ export default function TagsPage() {
             await fetchCustomTags();
             await fetchTags(newTagSubject);
             alert(t.tags?.custom?.success || "Tag added successfully!");
-        } catch (error: any) {
+        } catch (error: unknown) {
             if (error?.message?.includes('409')) {
                 alert(t.tags?.custom?.exists || "Tag already exists");
             } else {
@@ -266,7 +266,7 @@ export default function TagsPage() {
         return (
             <>
                 {SUBJECTS.map(({ key, name }) => {
-                    const subjectName = (t.tags?.subjects as any)?.[key] || name;
+                    const subjectName = (t.tags?.subjects as Record<string, string>)?.[key] || name;
                     const isExpanded = expandedNodes[`subject-${key}`];
                     const tags = tagsBySubject[key];
 
@@ -328,7 +328,7 @@ export default function TagsPage() {
                                 <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {SUBJECTS.map(({ key, name }) => (
-                                        <SelectItem key={key} value={key}>{(t.tags?.subjects as any)?.[key] || name}</SelectItem>
+                                        <SelectItem key={key} value={key}>{(t.tags?.subjects as Record<string, string>)?.[key] || name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -389,7 +389,7 @@ export default function TagsPage() {
 
                         return (
                             <Card key={key}>
-                                <CardHeader><CardTitle className="text-lg">{(t.tags?.subjects as any)?.[key] || name} ({tags.length})</CardTitle></CardHeader>
+                                <CardHeader><CardTitle className="text-lg">{(t.tags?.subjects as Record<string, string>)?.[key] || name} ({tags.length})</CardTitle></CardHeader>
                                 <CardContent className="space-y-4">
                                     {groupKeys.map(groupName => (
                                         <div key={groupName} className="space-y-2">

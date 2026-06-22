@@ -153,6 +153,68 @@ export interface PracticeStatsData {
     overallStats: { total: number; correct: number; rate: string };
 }
 
+export interface ReviewResultData {
+    nextReviewAt: string;
+    scheduledDays: number;
+    state: string;
+    reps: number;
+    lapses: number;
+}
+
+export interface PracticeRecordData {
+    id: string;
+    userId: string;
+    subject?: string | null;
+    difficulty?: string | null;
+    isCorrect?: boolean | null;
+    errorItemId?: string | null;
+    practiceType: string;
+    rating?: number | null;
+    durationSeconds?: number | null;
+    usedHint?: boolean | null;
+    independent?: boolean | null;
+    answerText?: string | null;
+    answerImageUrl?: string | null;
+    createdAt: string;
+    reviewResult?: ReviewResultData;
+}
+
+export interface ReviewTodayItem {
+    errorItemId: string;
+    fsrsCardId?: string;
+    subject?: {
+        id: string;
+        name: string;
+    } | null;
+    questionPreview: string;
+    originalImageUrl?: string | null;
+    due?: string;
+    lastReview?: string | null;
+    reps?: number;
+    lapses?: number;
+    state?: string;
+    scheduledDays?: number;
+    overdueDays?: number;
+}
+
+export interface UpcomingReviewDay {
+    date: string;
+    count: number;
+}
+
+export interface ReviewTodayResponse {
+    dueItems: ReviewTodayItem[];
+    newItems: ReviewTodayItem[];
+    stats: {
+        dueCount: number;
+        overdueCount: number;
+        newCount: number;
+        limit: number;
+        generatedAt: string;
+        upcoming?: UpcomingReviewDay[];
+    };
+}
+
 export interface TagStats {
     tag: string;
     count: number;

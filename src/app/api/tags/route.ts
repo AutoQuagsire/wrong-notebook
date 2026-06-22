@@ -23,7 +23,7 @@ interface TagTreeNode {
 /**
  * 构建标签树
  */
-function buildTagTree(tags: any[]): TagTreeNode[] {
+function buildTagTree(tags: { id: string; name: string; parentId: string | null; _count?: { errorItems: number } }[]): TagTreeNode[] {
     const tagMap = new Map<string, TagTreeNode>();
     const roots: TagTreeNode[] = [];
 

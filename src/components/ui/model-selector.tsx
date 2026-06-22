@@ -69,7 +69,7 @@ export function ModelSelector({ provider, apiKey, baseUrl, currentModel, onModel
                 setError(t.modelSelector?.noVisionModel || "No vision model found, please enter manually");
                 setUseCustom(true);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to fetch models:", err);
             const errorMsg = err?.message || (t.modelSelector?.fetchFailed || "Failed to fetch models");
             setError(errorMsg + (t.modelSelector?.enterManually || ", please enter manually"));

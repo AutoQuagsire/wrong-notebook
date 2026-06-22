@@ -3,7 +3,7 @@
   "version": "1.9.1",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0",
+    "dev": "next dev --webpack -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src",
@@ -51,6 +51,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "strip-markdown": "^6.0.0",
+    "ts-fsrs": "^5.4.1",
     "undici": "^7.16.0",
     "zod": "^4.1.13"
   },

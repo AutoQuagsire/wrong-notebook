@@ -119,7 +119,8 @@ export async function POST(req: Request) {
         logger.info('AI analysis successful');
 
         return NextResponse.json(analysisResult);
-    } catch (error: any) {
+    } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
         logger.error({
             error: error.message,
             stack: error.stack

@@ -4,16 +4,36 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+type PrismaMockArgs = { data: Record<string, unknown> };
+
 // Use vi.hoisted to ensure mocks are initialized before module imports
 const mocks = vi.hoisted(() => ({
+    mockProcessFsrsReview: vi.fn().mockResolvedValue({
+        due: new Date("2026-06-25T12:00:00Z"),
+        scheduled_days: 5,
+        state: "Review",
+        reps: 1,
+        lapses: 0,
+        stability: 2.5,
+        difficulty: 0.3,
+        elapsed_days: 0,
+        last_review: new Date("2026-06-20T12:00:00Z"),
+    }),
     mockPrismaErrorItem: {
         findUnique: vi.fn(),
     },
     mockPrismaPracticeRecord: {
         create: vi.fn(),
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
     },
     mockAIService: {
         generateSimilarQuestion: vi.fn(),
+    },
+    mockFsrsCard: {
+        findUnique: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
     },
     mockSession: {
         user: {
@@ -26,11 +46,23 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // Mock Prisma client
-vi.mock('@/lib/prisma', () => ({
-    prisma: {
+vi.mock('@/lib/prisma', () => {
+    const delegates = {
         errorItem: mocks.mockPrismaErrorItem,
         practiceRecord: mocks.mockPrismaPracticeRecord,
-    },
+        fsrsCard: mocks.mockFsrsCard,
+    };
+    return {
+        prisma: {
+            ...delegates,
+            $transaction: vi.fn((fn: (tx: typeof delegates) => unknown) => fn(delegates)),
+        },
+    };
+});
+
+// Mock FSRS service — practice tests focus on record API, not FSRS internals
+vi.mock('@/lib/fsrs/service', () => ({
+    processFsrsReview: mocks.mockProcessFsrsReview,
 }));
 
 // Mock AI service
@@ -49,13 +81,15 @@ vi.mock('@/lib/auth', () => ({
 
 // Import after mocks
 import { POST as GENERATE_POST } from '@/app/api/practice/generate/route';
-import { POST as RECORD_POST } from '@/app/api/practice/record/route';
+import { GET as RECORD_GET, POST as RECORD_POST } from '@/app/api/practice/record/route';
 import { getServerSession } from 'next-auth';
 
 describe('/api/practice', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(getServerSession).mockResolvedValue(mocks.mockSession);
+        mocks.mockPrismaPracticeRecord.findFirst.mockResolvedValue(null);
+        mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([]);
     });
 
     describe('POST /api/practice/generate (生成类似题目)', () => {
@@ -376,7 +410,133 @@ describe('/api/practice', () => {
         });
     });
 
+    describe('GET /api/practice/record (获取原题复习历史)', () => {
+        it('应该返回当前用户自己的原题复习历史', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({ userId: 'user-123' });
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                {
+                    id: 'review-1',
+                    userId: 'user-123',
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    answerImageUrl: 'data:image/jpeg;base64,abc',
+                    createdAt: new Date(),
+                },
+            ]);
+
+            const request = new Request('http://localhost/api/practice/record?errorItemId=error-item-1');
+            const response = await RECORD_GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data).toHaveLength(1);
+            expect(data[0].practiceType).toBe('ORIGINAL_REVIEW');
+            expect(data[0].answerImageUrl).toBe('data:image/jpeg;base64,abc');
+        });
+
+        it('应该拒绝查看其他用户的原题复习历史', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({ userId: 'other-user' });
+
+            const request = new Request('http://localhost/api/practice/record?errorItemId=error-item-2');
+            const response = await RECORD_GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(403);
+            expect(data.message).toBe("Cannot access another user's review history");
+        });
+
+        it('应该拒绝非法 errorItemId 的历史查询', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(null);
+
+            const request = new Request('http://localhost/api/practice/record?errorItemId=not-found');
+            const response = await RECORD_GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('Error item not found');
+        });
+
+        it('缺少 errorItemId 时应该返回 400', async () => {
+            const request = new Request('http://localhost/api/practice/record');
+            const response = await RECORD_GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('errorItemId is required');
+        });
+
+        it('应只返回 practiceType=ORIGINAL_REVIEW 的记录', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({ userId: 'user-123' });
+            const originalReviewRecord = {
+                id: 'review-original',
+                userId: 'user-123',
+                errorItemId: 'error-item-1',
+                practiceType: 'ORIGINAL_REVIEW',
+                rating: 3,
+                createdAt: new Date(),
+            };
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([originalReviewRecord]);
+
+            const request = new Request('http://localhost/api/practice/record?errorItemId=error-item-1&practiceType=ORIGINAL_REVIEW');
+            const response = await RECORD_GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data).toHaveLength(1);
+            expect(data[0].practiceType).toBe('ORIGINAL_REVIEW');
+
+            // Verify the query included practiceType filter
+            const callArgs = mocks.mockPrismaPracticeRecord.findMany.mock.calls[0][0] as PrismaMockArgs;
+            expect(callArgs.where).toHaveProperty('practiceType', 'ORIGINAL_REVIEW');
+        });
+
+        it('不传 practiceType 时应返回所有记录（向后兼容）', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({ userId: 'user-123' });
+            const mixedRecords = [
+                { id: 'r1', userId: 'user-123', errorItemId: 'error-item-1', practiceType: 'ORIGINAL_REVIEW', rating: 3, createdAt: new Date() },
+                { id: 'r2', userId: 'user-123', errorItemId: 'error-item-1', practiceType: 'SIMILAR_QUESTION', isCorrect: true, createdAt: new Date() },
+            ];
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue(mixedRecords);
+
+            const request = new Request('http://localhost/api/practice/record?errorItemId=error-item-1');
+            const response = await RECORD_GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data).toHaveLength(2);
+
+            // Verify no practiceType filter was applied
+            const callArgs = mocks.mockPrismaPracticeRecord.findMany.mock.calls[0][0] as PrismaMockArgs;
+            expect(callArgs.where).not.toHaveProperty('practiceType');
+        });
+
+        it('非法 practiceType 应返回 400', async () => {
+            const request = new Request('http://localhost/api/practice/record?errorItemId=error-item-1&practiceType=INVALID');
+            const response = await RECORD_GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toContain('Invalid practiceType');
+        });
+
+        it('仍然应拒绝其他用户的 errorItemId（带 practiceType 参数）', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({ userId: 'other-user' });
+
+            const request = new Request('http://localhost/api/practice/record?errorItemId=error-item-2&practiceType=ORIGINAL_REVIEW');
+            const response = await RECORD_GET(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(403);
+            expect(data.message).toBe("Cannot access another user's review history");
+        });
+    });
+
     describe('POST /api/practice/record (记录练习结果)', () => {
+        const mockOwnedErrorItem = {
+            userId: 'user-123',
+        };
+
         it('应该成功记录正确的练习结果', async () => {
             const createdRecord = {
                 id: 'record-1',
@@ -406,7 +566,7 @@ describe('/api/practice', () => {
             expect(data.isCorrect).toBe(true);
         });
 
-        it('应该成功记录错误的练习结果', async () => {
+        it('应该成功记录错误答案', async () => {
             const createdRecord = {
                 id: 'record-2',
                 userId: 'user-123',
@@ -485,7 +645,7 @@ describe('/api/practice', () => {
             vi.mocked(getServerSession).mockResolvedValue({
                 user: undefined,
                 expires: '2025-12-31',
-            } as any);
+            } as unknown as import('next-auth').Session);
 
             const request = new Request('http://localhost/api/practice/record', {
                 method: 'POST',
@@ -524,6 +684,852 @@ describe('/api/practice', () => {
 
             expect(response.status).toBe(500);
             expect(data.message).toBe('Failed to save record');
+        });
+
+        // === New tests for errorItemId tracking ===
+
+        it('应该成功保存带有 errorItemId 的练习记录', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            const createdRecord = {
+                id: 'record-ei-1',
+                userId: 'user-123',
+                subject: '数学',
+                difficulty: 'medium',
+                isCorrect: true,
+                errorItemId: 'error-item-1',
+                practiceType: 'SIMILAR_QUESTION',
+                answerText: 'x = 5',
+                createdAt: new Date(),
+            };
+            mocks.mockPrismaPracticeRecord.create.mockResolvedValue(createdRecord);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'error-item-1',
+                    practiceType: 'SIMILAR_QUESTION',
+                    answerText: 'x = 5',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.errorItemId).toBe('error-item-1');
+            expect(data.practiceType).toBe('SIMILAR_QUESTION');
+            expect(data.answerText).toBe('x = 5');
+        });
+
+        it('保存的 PracticeRecord 应该包含 errorItemId 字段', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'record-check-1',
+                ...args.data,
+                createdAt: new Date(),
+            }));
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '物理',
+                    difficulty: 'hard',
+                    isCorrect: false,
+                    errorItemId: 'error-item-42',
+                    practiceType: 'SIMILAR_QUESTION',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.errorItemId).toBe('error-item-42');
+            expect(data.practiceType).toBe('SIMILAR_QUESTION');
+
+            // Verify create was called with correct fields
+            expect(mocks.mockPrismaPracticeRecord.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        errorItemId: 'error-item-42',
+                        practiceType: 'SIMILAR_QUESTION',
+                        rating: null,
+                        durationSeconds: null,
+                    }),
+                })
+            );
+        });
+
+        it('应该拒绝其他用户的 errorItemId', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'other-user-999',
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'other-user-item',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(403);
+            expect(data.message).toBe("Cannot record practice for another user's error item");
+        });
+
+        it('应该返回 400 当 errorItemId 对应的错题不存在', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(null);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'non-existent-item',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('Error item not found');
+        });
+
+        it('不传 errorItemId 的旧请求仍兼容', async () => {
+            // No errorItem.findUnique should be called
+            mocks.mockPrismaErrorItem.findUnique.mockReset();
+            const createdRecord = {
+                id: 'record-legacy',
+                userId: 'user-123',
+                subject: '数学',
+                difficulty: 'easy',
+                isCorrect: true,
+                errorItemId: null,
+                practiceType: 'SIMILAR_QUESTION',
+                createdAt: new Date(),
+            };
+            mocks.mockPrismaPracticeRecord.create.mockResolvedValue(createdRecord);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'easy',
+                    isCorrect: true,
+                    // No errorItemId — legacy request
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.errorItemId).toBeNull();
+            expect(data.practiceType).toBe('SIMILAR_QUESTION');
+            // Should not have tried to look up an errorItem
+            expect(mocks.mockPrismaErrorItem.findUnique).not.toHaveBeenCalled();
+        });
+
+        it('应该保存额外的可选字段 (rating, durationSeconds, usedHint, independent)', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'record-full',
+                ...args.data,
+                createdAt: new Date(),
+            }));
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'error-item-1',
+                    practiceType: 'SIMILAR_QUESTION',
+                    rating: 4,
+                    durationSeconds: 120,
+                    usedHint: false,
+                    independent: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.rating).toBe(4);
+            expect(data.durationSeconds).toBe(120);
+            expect(data.usedHint).toBe(false);
+            expect(data.independent).toBe(true);
+        });
+
+        it('应该支持 ORIGINAL_REVIEW 并按 rating 映射 isCorrect=false', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '数学' },
+            });
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'review-record-1',
+                ...args.data,
+                createdAt: new Date(),
+            }));
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-review',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 2,
+                    answerText: '我的作答',
+                    durationSeconds: 95,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.practiceType).toBe('ORIGINAL_REVIEW');
+            expect(data.rating).toBe(2);
+            expect(data.isCorrect).toBe(false);
+            expect(data.subject).toBe('数学');
+            expect(data.answerText).toBe('我的作答');
+        });
+
+        it('应该支持 ORIGINAL_REVIEW 并按 rating 映射 isCorrect=true', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '英语' },
+            });
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'review-record-2',
+                ...args.data,
+                createdAt: new Date(),
+            }));
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-review-2',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 4,
+                    durationSeconds: 30,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.isCorrect).toBe(true);
+            expect(data.answerText).toBeNull();
+        });
+
+        it('ORIGINAL_REVIEW 允许 answerText 和 answerImageUrl 同时为空', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '物理' },
+            });
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'review-record-3',
+                ...args.data,
+                createdAt: new Date(),
+            }));
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-review-3',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 0,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.answerText).toBeNull();
+            expect(data.answerImageUrl).toBeNull();
+        });
+
+        it('ORIGINAL_REVIEW 应该保存 answerImageUrl', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '化学' },
+            });
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'review-record-4',
+                ...args.data,
+                createdAt: new Date(),
+            }));
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-review-4',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 1,
+                    durationSeconds: 180,
+                    answerImageUrl: 'data:image/jpeg;base64,abc123',
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.answerImageUrl).toBe('data:image/jpeg;base64,abc123');
+        });
+
+        it('ORIGINAL_REVIEW 应该拒绝非法 rating', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '数学' },
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-invalid-rating',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 5,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('rating must be an integer between 1 and 4');
+        });
+
+        it('ORIGINAL_REVIEW 应该拒绝负数 durationSeconds', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '数学' },
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-invalid-duration',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: -1,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('durationSeconds must be an integer between 0 and 86400');
+        });
+
+        it('ORIGINAL_REVIEW 未查看答案前不能提交评分', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '数学' },
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-no-reveal',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                    revealedAnswer: false,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('Please reveal the answer before rating this review');
+        });
+
+        it('ORIGINAL_REVIEW 重复提交不应重复创建记录', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '数学' },
+            });
+
+            let existingRecord: Record<string, unknown> | null = null;
+            mocks.mockPrismaPracticeRecord.findFirst.mockImplementation(async () => existingRecord);
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => {
+                existingRecord = {
+                    id: 'review-record-dedup',
+                    ...args.data,
+                    createdAt: new Date(),
+                };
+                return existingRecord;
+            });
+
+            const requestBody = {
+                errorItemId: 'error-item-dedup',
+                practiceType: 'ORIGINAL_REVIEW',
+                rating: 3,
+                durationSeconds: 42,
+                answerText: '同一份作答',
+                answerImageUrl: 'data:image/jpeg;base64,same',
+                revealedAnswer: true,
+            };
+
+            const firstResponse = await RECORD_POST(new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify(requestBody),
+                headers: { 'Content-Type': 'application/json' },
+            }));
+
+            const secondResponse = await RECORD_POST(new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify(requestBody),
+                headers: { 'Content-Type': 'application/json' },
+            }));
+
+            const firstData = await firstResponse.json();
+            const secondData = await secondResponse.json();
+
+            expect(firstResponse.status).toBe(200);
+            expect(secondResponse.status).toBe(200);
+            expect(firstData.id).toBe('review-record-dedup');
+            expect(secondData.id).toBe('review-record-dedup');
+            expect(mocks.mockPrismaPracticeRecord.create).toHaveBeenCalledTimes(1);
+        });
+
+        it('10秒内重复提交不应触发 FSRS 更新', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            const existingRecord = {
+                id: 'review-record-dedup',
+                userId: 'user-123',
+                errorItemId: 'error-item-1',
+                practiceType: 'ORIGINAL_REVIEW',
+                rating: 3,
+                durationSeconds: 60,
+                answerText: null,
+                answerImageUrl: null,
+                createdAt: new Date(Date.now() - 5000),
+            };
+            mocks.mockPrismaPracticeRecord.findFirst.mockResolvedValue(existingRecord);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+
+            // FSRS should NOT be updated for duplicates
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('TASK-004: FSRS integration in ORIGINAL_REVIEW', () => {
+        const mockOwnedErrorItem = {
+            userId: 'user-123',
+            subject: { name: '数学' },
+        };
+
+        beforeEach(() => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            mocks.mockPrismaPracticeRecord.findFirst.mockResolvedValue(null);
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: `record-fsrs-${Date.now()}`,
+                ...args.data,
+                createdAt: new Date(),
+            }));
+        });
+
+        it('ORIGINAL_REVIEW 第一次评分应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 120,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledTimes(1);
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-1',
+                3,
+                expect.anything(), // tx client
+            );
+        });
+
+        it('Rating 1 (Again) 应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 1,
+                    durationSeconds: 45,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-1',
+                1,
+                expect.anything(),
+            );
+        });
+
+        it('Rating 2 (Hard) 应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 2,
+                    durationSeconds: 90,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-1',
+                2,
+                expect.anything(),
+            );
+        });
+
+        it('Rating 4 (Easy) 应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 4,
+                    durationSeconds: 30,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-1',
+                4,
+                expect.anything(),
+            );
+        });
+
+        it('SIMILAR_QUESTION 不应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                    errorItemId: 'error-item-1',
+                    practiceType: 'SIMILAR_QUESTION',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(200);
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+
+        it('非法 rating 不应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 5,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(400);
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+
+        it('其他用户的 errorItemId 不应调用 processFsrsReview', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({ userId: 'other-user' });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-2',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(403);
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+
+        it('缺少 revealedAnswer 时不应调用 processFsrsReview', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            expect(response.status).toBe(400);
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+        });
+
+        it('ORIGINAL_REVIEW 响应应包含 reviewResult.nextReviewAt', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.reviewResult).toBeDefined();
+            expect(data.reviewResult.nextReviewAt).toBe("2026-06-25T12:00:00.000Z");
+            expect(data.reviewResult.scheduledDays).toBe(5);
+            expect(data.reviewResult.state).toBe("Review");
+            expect(data.reviewResult.reps).toBe(1);
+            expect(data.reviewResult.lapses).toBe(0);
+        });
+
+        it('reviewResult 字段应与 processFsrsReview 返回一致', async () => {
+            const customDue = new Date("2026-07-01T08:00:00Z");
+            mocks.mockProcessFsrsReview.mockResolvedValueOnce({
+                due: customDue,
+                scheduled_days: 10,
+                state: "Learning",
+                reps: 2,
+                lapses: 1,
+                stability: 1.5,
+                difficulty: 0.5,
+                elapsed_days: 1,
+                last_review: new Date(),
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 2,
+                    durationSeconds: 45,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.reviewResult).toBeDefined();
+            expect(data.reviewResult.nextReviewAt).toBe("2026-07-01T08:00:00.000Z");
+            expect(data.reviewResult.scheduledDays).toBe(10);
+            expect(data.reviewResult.state).toBe("Learning");
+            expect(data.reviewResult.reps).toBe(2);
+            expect(data.reviewResult.lapses).toBe(1);
+        });
+
+        it('SIMILAR_QUESTION 不应返回 reviewResult', async () => {
+            mocks.mockPrismaPracticeRecord.create.mockResolvedValue({
+                id: 'record-sq',
+                userId: 'user-123',
+                subject: '数学',
+                difficulty: 'medium',
+                isCorrect: true,
+                errorItemId: 'error-item-1',
+                practiceType: 'SIMILAR_QUESTION',
+                createdAt: new Date(),
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'SIMILAR_QUESTION',
+                    subject: '数学',
+                    difficulty: 'medium',
+                    isCorrect: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.reviewResult).toBeUndefined();
+        });
+
+        it('ORIGINAL_REVIEW 重复提交也应返回 reviewResult（来自 processFsrsReview）', async () => {
+            // Setup duplicate detection
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                userId: 'user-123',
+                subject: { name: '数学' },
+            });
+
+            const existingRecord = {
+                id: 'review-record-dedup',
+                userId: 'user-123',
+                errorItemId: 'error-item-dup',
+                practiceType: 'ORIGINAL_REVIEW',
+                rating: 3,
+                durationSeconds: 60,
+                answerText: null,
+                answerImageUrl: null,
+                createdAt: new Date(Date.now() - 5000),
+            };
+            mocks.mockPrismaPracticeRecord.findFirst.mockResolvedValue(existingRecord);
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-dup',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 3,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            // Duplicate returns the existing record as-is, no processFsrsReview called
+            expect(data.reviewResult).toBeUndefined();
+        });
+
+        it('Rating 1 (Again) 的 reviewResult.nextReviewAt 应至少是明天', async () => {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(6, 0, 0, 0);
+
+            mocks.mockProcessFsrsReview.mockResolvedValueOnce({
+                // Simulate FSRS returned 15 minutes later, but clamped to tomorrow
+                due: tomorrow,
+                scheduled_days: 1,
+                state: "Learning",
+                reps: 1,
+                lapses: 1,
+                stability: 1.0,
+                difficulty: 0.5,
+                elapsed_days: 0,
+                last_review: new Date(),
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-again',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 1,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.reviewResult).toBeDefined();
+
+            const nextDate = new Date(data.reviewResult.nextReviewAt);
+            expect(nextDate.getTime()).toBeGreaterThanOrEqual(tomorrow.getTime());
+
+            // Verify local calendar date is tomorrow or later
+            const nowDate = new Date();
+            const nextDay = new Date(nextDate);
+            const isTomorrowOrLater =
+                nextDay.getFullYear() > nowDate.getFullYear() ||
+                nextDay.getMonth() > nowDate.getMonth() ||
+                nextDay.getDate() >= nowDate.getDate() + 1;
+            expect(isTomorrowOrLater).toBe(true);
         });
     });
 });

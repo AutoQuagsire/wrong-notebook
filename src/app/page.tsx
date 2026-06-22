@@ -13,7 +13,7 @@ import { AnalyzeResponse, Notebook, AppConfig } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { processImageFile } from "@/lib/image-utils";
-import { Upload, BookOpen, Tags, LogOut, BarChart3, PenLine } from "lucide-react";
+import { Upload, BookOpen, Tags, LogOut, BarChart3, PenLine, BookMarked } from "lucide-react";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { BroadcastNotification } from "@/components/broadcast-notification";
 import { signOut } from "next-auth/react";
@@ -194,7 +194,7 @@ function HomeContent() {
             frontendLogger.info('[HomeAnalyze]', 'Analysis completed successfully', {
                 totalDuration
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             const errorDuration = Date.now() - startTime;
             frontendLogger.error('[HomeError]', 'Analysis failed', {
                 errorDuration,
@@ -211,7 +211,7 @@ function HomeContent() {
                 if (backendErrorType && typeof backendErrorType === 'string') {
                     // 检查是否是已知的 AI 错误类型
                     if (t.errors && typeof t.errors === 'object' && backendErrorType in t.errors) {
-                        const mappedError = (t.errors as any)[backendErrorType];
+                        const mappedError = (t.errors as Record<string, string>)[backendErrorType];
                         if (typeof mappedError === 'string') {
                             errorMessage = mappedError;
                             frontendLogger.info('[HomeError]', `Matched error type: ${backendErrorType}`, {
@@ -283,7 +283,7 @@ function HomeContent() {
             if (finalData.subjectId) {
                 router.push(`/notebooks/${finalData.subjectId}`);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             frontendLogger.error('[HomeSave]', 'Save failed', {
                 errorStatus: error?.status,
                 errorMessage: error?.data?.message || error?.message || String(error),
@@ -329,7 +329,7 @@ function HomeContent() {
                 knowledgePoints: result.knowledgePoints || [],
                 wrongAnswerText: result.wrongAnswerText || "",
                 mistakeAnalysis: result.mistakeAnalysis || "",
-                mistakeStatus: (result.mistakeStatus as any) || "unknown",
+                mistakeStatus: (result.mistakeStatus as string) || "unknown",
                 subject: "数学", // Default, will be overridden by notebook selection
                 requiresImage: false,
             };
@@ -340,7 +340,7 @@ function HomeContent() {
 
             const totalDuration = Date.now() - startTime;
             frontendLogger.info('[HomeTextSubmit]', 'Text analysis completed', { totalDuration });
-        } catch (error: any) {
+        } catch (error: unknown) {
             const errorDuration = Date.now() - startTime;
             frontendLogger.error('[HomeTextSubmit]', 'Analysis failed', {
                 errorDuration,
@@ -352,7 +352,7 @@ function HomeContent() {
                 const backendErrorType = error?.data?.message;
                 if (backendErrorType && typeof backendErrorType === 'string') {
                     if (t.errors && typeof t.errors === 'object' && backendErrorType in t.errors) {
-                        const mappedError = (t.errors as any)[backendErrorType];
+                        const mappedError = (t.errors as Record<string, string>)[backendErrorType];
                         if (typeof mappedError === 'string') errorMessage = mappedError;
                     } else {
                         errorMessage = backendErrorType;
@@ -412,7 +412,7 @@ function HomeContent() {
             if (data.subjectId) {
                 router.push(`/notebooks/${data.subjectId}`);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             frontendLogger.error('[HomeDirectSave]', 'Save failed', {
                 errorStatus: error?.status,
                 errorMessage: error?.data?.message || error?.message || String(error),
@@ -499,6 +499,19 @@ function HomeContent() {
                                     <div className="flex items-center gap-2">
                                         <Tags className="h-5 w-5" />
                                         <span>{t.app?.tags || 'Tags'}</span>
+                                    </div>
+                                </Button>
+                            </Link>
+
+                            <Link href="/review/today" className="w-full">
+                                <Button
+                                    variant="outline"
+                                    size="lg"
+                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <BookMarked className="h-5 w-5" />
+                                        <span>今日复习</span>
                                     </div>
                                 </Button>
                             </Link>

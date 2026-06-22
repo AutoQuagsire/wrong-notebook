@@ -175,7 +175,7 @@ export default function AddErrorPage() {
             frontendLogger.info('[AddAnalyze]', 'Analysis completed successfully', {
                 totalDuration
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             const errorDuration = Date.now() - startTime;
             frontendLogger.error('[AddError]', 'Analysis failed', {
                 errorDuration,
@@ -194,7 +194,7 @@ export default function AddErrorPage() {
                     // 检查是否是已知的 AI 错误类型
                     // 使用安全访问
                     if (t.errors && typeof t.errors === 'object' && backendErrorType in t.errors) {
-                        const mappedError = (t.errors as any)[backendErrorType];
+                        const mappedError = (t.errors as Record<string, string>)[backendErrorType];
                         if (typeof mappedError === 'string') {
                             errorMessage = mappedError;
                             frontendLogger.info('[AddError]', `Matched error type: ${backendErrorType}`, {
@@ -267,7 +267,7 @@ export default function AddErrorPage() {
                 knowledgePoints: result.knowledgePoints || [],
                 wrongAnswerText: result.wrongAnswerText || "",
                 mistakeAnalysis: result.mistakeAnalysis || "",
-                mistakeStatus: (result.mistakeStatus as any) || "unknown",
+                mistakeStatus: (result.mistakeStatus as string) || "unknown",
                 subject: "数学",
                 requiresImage: false,
             };
@@ -278,7 +278,7 @@ export default function AddErrorPage() {
 
             const totalDuration = Date.now() - startTime;
             frontendLogger.info('[AddTextSubmit]', 'Text analysis completed', { totalDuration });
-        } catch (error: any) {
+        } catch (error: unknown) {
             const errorDuration = Date.now() - startTime;
             frontendLogger.error('[AddTextSubmit]', 'Analysis failed', {
                 errorDuration,
@@ -290,7 +290,7 @@ export default function AddErrorPage() {
                 const backendErrorType = error?.data?.message;
                 if (backendErrorType && typeof backendErrorType === 'string') {
                     if (t.errors && typeof t.errors === 'object' && backendErrorType in t.errors) {
-                        const mappedError = (t.errors as any)[backendErrorType];
+                        const mappedError = (t.errors as Record<string, string>)[backendErrorType];
                         if (typeof mappedError === 'string') errorMessage = mappedError;
                     } else {
                         errorMessage = backendErrorType;

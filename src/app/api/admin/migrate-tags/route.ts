@@ -33,7 +33,7 @@ export async function POST(req: Request) {
         return unauthorized();
     }
 
-    if ((session.user as any).role !== 'admin') {
+    if (session.user.role !== 'admin') {
         return forbidden("Admin access required for tag migration");
     }
 
@@ -230,9 +230,9 @@ export async function POST(req: Request) {
     }
 }
 
-async function seedMath(tx: any, curriculum: any, gradeOrder: any) {
+async function seedMath(tx: Record<string, unknown>, curriculum: Record<string, string[]>, gradeOrder: Record<string, number>) {
     let count = 0;
-    for (const [gradeSemester, chapters] of Object.entries(curriculum) as any) {
+    for (const [gradeSemester, chapters] of Object.entries(curriculum)) {
         const gradeNode = await tx.knowledgeTag.create({
             data: {
                 name: gradeSemester,
@@ -289,9 +289,9 @@ async function seedMath(tx: any, curriculum: any, gradeOrder: any) {
     return count;
 }
 
-async function seedStandardSubject(tx: any, subject: string, curriculum: any, gradeOrder: any) {
+async function seedStandardSubject(tx: Record<string, unknown>, subject: string, curriculum: Record<string, string[]>, gradeOrder: Record<string, number>) {
     let count = 0;
-    for (const [gradeSemester, chapters] of Object.entries(curriculum) as any) {
+    for (const [gradeSemester, chapters] of Object.entries(curriculum)) {
         const gradeNode = await tx.knowledgeTag.create({
             data: {
                 name: gradeSemester,

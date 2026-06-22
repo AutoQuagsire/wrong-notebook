@@ -54,7 +54,7 @@ export default function RegisterPage() {
         }
 
         try {
-            await apiClient.post<any, RegisterRequest>("/api/register", {
+            await apiClient.post<unknown, RegisterRequest>("/api/register", {
                 name,
                 email,
                 password,
@@ -64,7 +64,7 @@ export default function RegisterPage() {
 
             alert(t.auth?.register?.success || 'Registration successful! Please login');
             router.push("/login");
-        } catch (error: any) {
+        } catch (error: unknown) {
             let errorMsg = error.data?.message;
             if (errorMsg === 'User with this email already exists') {
                 errorMsg = t.auth?.register?.emailExists || errorMsg;

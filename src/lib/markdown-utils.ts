@@ -15,7 +15,7 @@ export function cleanMarkdown(content: string): string {
         let text = content.replace(/\\_/g, '_');
 
         // 2. Use remark to strip markdown formatting
-        const file = remark().use(stripMarkdown as any).processSync(text);
+        const file = remark().use(stripMarkdown as () => unknown).processSync(text);
         text = String(file);
 
         // 3. Post-processing: specific cleanups for this app
@@ -60,4 +60,57 @@ export function cleanMarkdown(content: string): string {
         // Fallback to original content if stripping fails
         return content;
     }
+}
+
+/**
+ * Normalize math delimiters from AI output to KaTeX-compatible format.
+ *
+ * Converts:
+ *   \\( ... \\) → $...$   (inline math)
+ *   \\[ ... \\] → $$...$$ (display math)
+ *
+ * Skips content inside code blocks (``` ... ```) and inline code (` ... `).
+ * Does not double-convert already-correct $...$ and $$...$$.
+ *
+ * @param input - Raw text potentially containing LaTeX delimiters
+ * @returns Text with normalized delimiters
+ */
+export function normalizeMathDelimiters(input: string): string {
+    if (!input) return input;
+
+    // Protect code blocks first — split by fenced code blocks
+    const fenceRegex = /(`{3,})[\s\S]*?\1/g;
+    const fences: string[] = [];
+
+    let normalized = input.replace(fenceRegex, (match) => {
+        fences.push(match);
+        return `\x00FENCE${fences.length - 1}\x00`;
+    });
+
+    // Protect inline code
+    const inlineRegex = /`[^`\n]+`/g;
+    const inlines: string[] = [];
+
+    normalized = normalized.replace(inlineRegex, (match) => {
+        inlines.push(match);
+        return `\x00INLINE${inlines.length - 1}\x00`;
+    });
+
+    // Convert \( ... \) → $...$ (inline LaTeX → KaTeX)
+    // $$ in replacement string means literal $ (single)
+    normalized = normalized.replace(/\\\(/g, '$$');
+    normalized = normalized.replace(/\\\)/g, '$$');
+
+    // Convert \[ ... \] → $$...$$ (display LaTeX → KaTeX)
+    // Note: $$ in replacement string means literal $, so $$$$ = literal $$
+    normalized = normalized.replace(/\\\[/g, '$$$$');
+    normalized = normalized.replace(/\\\]/g, '$$$$');
+
+    // Restore inline code
+    normalized = normalized.replace(/\x00INLINE(\d+)\x00/g, (_, i) => inlines[parseInt(i)]);
+
+    // Restore fenced code blocks
+    normalized = normalized.replace(/\x00FENCE(\d+)\x00/g, (_, i) => fences[parseInt(i)]);
+
+    return normalized;
 }

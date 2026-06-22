@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
             similar: '',
         },
     })),
-    mockUpdateAppConfig: vi.fn((config: any) => ({
+    mockUpdateAppConfig: vi.fn((config: Record<string, unknown>) => ({
         ...config,
         aiProvider: config.aiProvider || 'gemini',
     })),

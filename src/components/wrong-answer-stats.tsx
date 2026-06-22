@@ -16,7 +16,7 @@ export function WrongAnswerStats() {
     const [loading, setLoading] = useState(true);
     const { t, language } = useLanguage();
 
-    const CustomTooltip = ({ active, payload, label }: any) => {
+    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
         if (active && payload && payload.length) {
             return (
                 <div className="bg-background border rounded-lg shadow-lg p-3 text-sm">
