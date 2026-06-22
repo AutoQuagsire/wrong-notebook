@@ -354,6 +354,32 @@ describe("GET /api/review/today", () => {
             const findCall = mocks.mockFsrsCard.findMany.mock.calls[0][0] as { where: { userId: string } };
             expect(findCall.where.userId).toBe("user-123");
         });
+
+        it("完成首次 ORIGINAL_REVIEW 后该题不应再作为 newItem", async () => {
+            // Simulate: an errorItem "err-reviewed" now has an FsrsCard after review
+            mocks.mockFsrsCard.findMany
+                .mockResolvedValueOnce([]) // due cards: empty
+                .mockResolvedValueOnce([
+                    { errorItemId: "err-reviewed" },
+                    { errorItemId: "err-other" },
+                ]); // existing fsrs errorItemIds
+
+            mocks.mockErrorItem.findMany.mockResolvedValue([]);
+
+            const req = new Request("http://localhost/api/review/today?includeNew=true");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            expect(data.newItems).toHaveLength(0);
+
+            // errorItem.findMany should have been called with notIn filter
+            const findManyCall = mocks.mockErrorItem.findMany.mock.calls[0][0] as {
+                where: { userId: string; id: { notIn: string[] } };
+            };
+            expect(findManyCall.where.id.notIn).toContain("err-reviewed");
+            expect(findManyCall.where.id.notIn).toContain("err-other");
+        });
     });
 
     describe("question preview", () => {

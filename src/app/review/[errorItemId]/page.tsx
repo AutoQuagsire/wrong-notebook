@@ -71,6 +71,11 @@ export default function ReviewPage() {
     const errorItemId = typeof params.errorItemId === "string" ? params.errorItemId : "";
     const startTimeRef = useRef(Date.now());
 
+    const [fromToday, setFromToday] = useState(false);
+    useEffect(() => {
+        setFromToday(new URLSearchParams(window.location.search).get("from") === "today");
+    }, []);
+
     const [item, setItem] = useState<ReviewItem | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -468,6 +473,16 @@ export default function ReviewPage() {
                                         <p className="mt-2">
                                             已记录评分：{getRatingLabel(savedRecord.rating)}；独立作答耗时：{formatDuration(savedRecord.durationSeconds || 0)}。
                                         </p>
+                                        {fromToday && (
+                                            <div className="mt-3 pt-3 border-t border-green-200">
+                                                <Link href="/review/today">
+                                                    <Button variant="outline" size="sm">
+                                                        <ArrowLeft className="mr-1.5 h-4 w-4" />
+                                                        返回今日复习
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : null}
                             </CardContent>

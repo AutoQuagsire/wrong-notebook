@@ -116,7 +116,7 @@ function DueItemCard({ item }: { item: ReviewTodayItem }) {
                 </div>
                 {/* Right: button */}
                 <div className="shrink-0 pt-1">
-                    <Link href={`/review/${item.errorItemId}`}>
+                    <Link href={`/review/${item.errorItemId}?from=today`}>
                         <Button size="sm" className="w-full sm:w-auto">
                             <PlayCircle className="mr-1.5 h-4 w-4" />
                             复习原题
@@ -144,7 +144,7 @@ function NewItemCard({ item }: { item: ReviewTodayItem }) {
                     </div>
                 </div>
                 <div className="shrink-0 pt-1">
-                    <Link href={`/review/${item.errorItemId}`}>
+                    <Link href={`/review/${item.errorItemId}?from=today`}>
                         <Button size="sm" variant="outline">
                             <PlayCircle className="mr-1.5 h-4 w-4" />
                             开始复习
@@ -316,7 +316,7 @@ export default function ReviewTodayPage() {
                                     第一题：{firstDueItem.subject?.name || "未知"} &mdash; {firstDueItem.questionPreview.slice(0, 40)}&hellip;
                                 </p>
                             </div>
-                            <Link href={`/review/${firstDueItem.errorItemId}`}>
+                            <Link href={`/review/${firstDueItem.errorItemId}?from=today`}>
                                 <Button size="lg">
                                     <PlayCircle className="mr-2 h-5 w-5" />
                                     开始复习
