@@ -101,3 +101,14 @@
 ### Follow-ups
 - ...
 ```
+
+## 10. Mobile Migration Guardrails
+
+- 当前优先仍是 Next.js Web 应用。不要迁移到 Taro、uni-app、React Native、Flutter、微信小程序、Capacitor 或其他移动端框架，除非任务明确要求。
+- 核心复习逻辑必须保持在 `src/lib`、service 层或 API route 中，不得写死在 Web UI 组件里：FSRS 调度、PracticeRecord 创建、FsrsCard 更新、复习队列生成、AI/OCR 流程、上传校验、API 响应构造。
+- API route 和 `src/types/api.ts` 是未来的移动端/H5/小程序复用边界。不要让移动端客户端依赖 Web 组件内部实现。
+- 不要只靠浏览器 state、`localStorage` 或 Web-only 逻辑存储关键复习状态。PracticeRecord、FsrsCard 状态、下次复习日期、作答图片、AI 结果必须通过 API / 数据库持久化。
+- 业务/服务层不要依赖 `window`、`document`、DOM 事件、shadcn/ui 组件、浏览器上传对象等 Web-only API。把它们隔离在 UI 或适配代码中。
+- 题目、答案、解析内容以可移植的 Markdown/LaTeX/文本格式存储，不要以 Web-only HTML 作为内容源。
+- 任何移动端/H5/App/小程序迁移任务必须显式标记并分小阶段执行。普通 Web 功能开发期间不要创建 mobile 项目、跨平台包或新顶层目录。
+- 如果任务需要移动端截图验证、UI 视觉检查、图片识别或手写作答分析，必须显式标注需要多模态模型，并尽量批量处理这类任务。
