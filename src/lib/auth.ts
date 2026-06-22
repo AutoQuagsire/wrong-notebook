@@ -112,7 +112,7 @@ export const authOptions: NextAuthOptions = {
                 return {
                     ...token,
                     id: user.id,
-                    role: (user as any).role,
+                    role: user.role,
                 }
             }
             logger.debug('JWT callback - Subsequent call');

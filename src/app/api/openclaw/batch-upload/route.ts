@@ -86,10 +86,10 @@ async function callOpenclawAgent(imageBase64: string, mimeType: string, timeout:
 
         const data = await response.json() as OpenclawResponse;
         return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
         clearTimeout(timeoutId);
-        
-        if (error.name === 'AbortError') {
+
+        if (error instanceof Error && error.name === 'AbortError') {
             logger.error('Openclaw agent timeout');
             return {
                 success: false,
@@ -378,7 +378,7 @@ export async function POST(req: Request) {
                 });
 
                 logger.info({ index: i, errorItemId: errorItem.id }, 'Error item created successfully');
-            } catch (dbError: any) {
+            } catch (dbError: unknown) {
                 logger.error({ index: i, error: dbError?.message || String(dbError) }, 'Failed to create error item');
                 results.push({
                     success: false,
@@ -406,7 +406,7 @@ export async function POST(req: Request) {
             failCount,
             results,
         }, { status: statusCode });
-    } catch (error: any) {
+    } catch (error: unknown) {
         logger.error({ error: error?.message || String(error), stack: error?.stack }, 'Batch upload error');
         return createErrorResponse(
             error?.message || '批量上传失败',

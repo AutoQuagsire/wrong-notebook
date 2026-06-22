@@ -82,7 +82,7 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
             // 请求屏幕共享权限，优先当前标签页
             const displayMediaOptions: DisplayMediaStreamOptions & {
                 preferCurrentTab?: boolean;
-                controller?: any;
+                controller?: CaptureController | null;
             } = {
                 video: true,
                 audio: false,
@@ -90,7 +90,7 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
             };
 
             if (controller) {
-                (displayMediaOptions as any).controller = controller;
+                (displayMediaOptions as Record<string, unknown>).controller = controller;
             }
 
             const stream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
@@ -98,7 +98,7 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
             // 获取视频轨道并检查捕获类型
             const [videoTrack] = stream.getVideoTracks();
             const settings = videoTrack.getSettings();
-            const displaySurface = (settings as any).displaySurface;  // 'browser' 表示标签页
+            const displaySurface = (settings as Record<string, unknown>).displaySurface;  // 'browser' 表示标签页
 
             // 如果是标签页或窗口，设置不切换焦点
             if (controller && (displaySurface === 'browser' || displaySurface === 'window')) {

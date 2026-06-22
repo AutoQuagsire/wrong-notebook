@@ -21,7 +21,7 @@ let ggbScriptPromise: Promise<void> | null = null;
 function loadGeoGebraScript(): Promise<void> {
     if (ggbScriptPromise) return ggbScriptPromise;
     ggbScriptPromise = new Promise<void>((resolve, reject) => {
-        if (typeof window !== "undefined" && (window as any).GGBApplet) {
+        if (typeof window !== "undefined" && (window as Record<string, unknown>).GGBApplet) {
             resolve();
             return;
         }
@@ -99,7 +99,7 @@ function parseApiArgs(cmd: string): { m: string; a: unknown[] } | null {
     catch { return null; }
 }
 
-function runCommands(api: any, cmds: string[]) {
+function runCommands(api: Record<string, unknown>, cmds: string[]) {
     for (const cmd of cmds) {
         try {
             if (isApiCall(cmd)) {
@@ -134,7 +134,7 @@ export function GeogebraDemo({
     // All GeoGebra DOM is injected via innerHTML in the effect, so
     // React's reconciler never touches the inside of this node.
     const ggbHostRef = useRef<HTMLDivElement>(null);
-    const apiRef = useRef<any>(null);
+    const apiRef = useRef<Record<string, unknown> | null>(null);
     const idRef = useRef(`ggb-${Math.random().toString(36).slice(2, 9)}`);
 
     const [loading, setLoading] = useState(true);
@@ -153,7 +153,9 @@ export function GeogebraDemo({
 
         loadGeoGebraScript().then(() => {
             if (dead) return;
-            const GGBApplet = (window as any).GGBApplet;
+            const GGBApplet = (window as Record<string, unknown>).GGBApplet as
+                | { new (config: Record<string, unknown>, ggbVersion: boolean): { inject: (id: string) => void } }
+                | undefined;
             if (!GGBApplet) { setError("GeoGebra 未正确加载"); setLoading(false); return; }
 
             const el = ggbHostRef.current;
@@ -174,7 +176,7 @@ export function GeogebraDemo({
                     enableRightClick: true,
                     enableShiftDragZoom: true,
                     language: "zh",
-                    appletOnLoad: (api: any) => {
+                    appletOnLoad: (api: Record<string, unknown>) => {
                         if (dead) return;
                         apiRef.current = api;
                         runCommands(api, cmds);

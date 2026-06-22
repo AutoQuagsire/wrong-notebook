@@ -36,7 +36,7 @@ export async function GET(req: Request) {
         // 按照现有逻辑，很多地方都有 fallback 到默认用户的逻辑，这里也保持一致比较好，
         // 或者只返回系统标签。稳妥起见，如果已登录则返回用户标签。
 
-        const whereCondition: any = {
+        const whereCondition: Record<string, unknown> = {
             ...(subject ? { subject } : {}),
             OR: [
                 { isSystem: true },

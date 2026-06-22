@@ -60,7 +60,7 @@ export async function PATCH(req: Request) {
         const body = await req.json();
         const { name, email, password, educationStage, enrollmentYear } = userUpdateSchema.parse(body);
 
-        const updateData: any = {};
+        const updateData: Record<string, unknown> = {};
 
         // 只有非空字符串才会触发更新
         if (name && name.trim()) updateData.name = name.trim();

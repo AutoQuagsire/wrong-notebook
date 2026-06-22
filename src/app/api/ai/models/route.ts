@@ -30,7 +30,7 @@ async function fetchGeminiModels(apiKey: string, baseUrl: string): Promise<Model
 
     const data = await response.json();
     return (data.models || [])
-        .map((m: any) => {
+        .map((m: { name: string }) => {
             const id = extractModelName(m.name);
             return {
                 id,
@@ -58,7 +58,7 @@ async function fetchOpenAIModels(apiKey: string, baseUrl: string): Promise<Model
     const data = await response.json();
 
     return (data.data || [])
-        .map((model: any) => ({
+        .map((model: { id: string }) => ({
             id: model.id,
             name: model.id,
             owned_by: model.owned_by,
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ models });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         logger.error({ error }, 'Error fetching models');
         return NextResponse.json(
             { error: error.message || 'Internal server error', models: [] },

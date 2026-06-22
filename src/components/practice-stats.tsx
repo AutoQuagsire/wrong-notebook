@@ -17,12 +17,17 @@ const DIFFICULTY_COLORS: Record<string, string> = {
     'Unknown': '#94a3b8' // Slate-400
 };
 
-const CustomTooltip = ({ active, payload, label, t }: any) => {
+const CustomTooltip = ({ active, payload, label, t }: {
+    active?: boolean;
+    payload?: { name: string; value: number; color: string }[];
+    label?: string;
+    t: Record<string, Record<string, string>>;
+}) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-background border rounded-lg shadow-lg p-3 text-sm">
                 <p className="font-medium mb-2">{label}</p>
-                {payload.map((entry: any, index: number) => (
+                {payload.map((entry, index: number) => (
                     <div key={index} className="flex items-center gap-2 mb-1 last:mb-0">
                         <div
                             className="w-3 h-3 rounded-full"
@@ -39,7 +44,7 @@ const CustomTooltip = ({ active, payload, label, t }: any) => {
                 <div className="mt-2 pt-2 border-t flex justify-between gap-4">
                     <span className="text-muted-foreground">{t.stats?.total || "Total"}:</span>
                     <span className="font-bold">
-                        {payload.reduce((acc: number, curr: any) => acc + (typeof curr.value === 'number' ? curr.value : 0), 0)}
+                        {payload.reduce((acc: number, curr) => acc + (typeof curr.value === 'number' ? curr.value : 0), 0)}
                     </span>
                 </div>
             </div>
