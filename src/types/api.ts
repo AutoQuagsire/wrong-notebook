@@ -170,6 +170,36 @@ export interface PracticeRecordData {
     createdAt: string;
 }
 
+export interface ReviewTodayItem {
+    errorItemId: string;
+    fsrsCardId?: string;
+    subject?: {
+        id: string;
+        name: string;
+    } | null;
+    questionPreview: string;
+    originalImageUrl?: string | null;
+    due?: string;
+    lastReview?: string | null;
+    reps?: number;
+    lapses?: number;
+    state?: string;
+    scheduledDays?: number;
+    overdueDays?: number;
+}
+
+export interface ReviewTodayResponse {
+    dueItems: ReviewTodayItem[];
+    newItems: ReviewTodayItem[];
+    stats: {
+        dueCount: number;
+        overdueCount: number;
+        newCount: number;
+        limit: number;
+        generatedAt: string;
+    };
+}
+
 export interface TagStats {
     tag: string;
     count: number;
