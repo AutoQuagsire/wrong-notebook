@@ -121,3 +121,26 @@ export function computeNextCard(card: FsrsCardData, rating: number, now: Date): 
 
     return toFsrsCardData(result.card);
 }
+
+/**
+ * Clamp a due date so it never lands on the same calendar day as "now".
+ * If FSRS schedules the next review for today (minutes/hours later),
+ * push it to tomorrow 06:00 local time and ensure scheduledDays >= 1.
+ */
+export function clampDueToNextDay(card: FsrsCardData, now: Date): FsrsCardData {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(6, 0, 0, 0);
+
+    const due = new Date(card.due);
+
+    if (due < tomorrow) {
+        return {
+            ...card,
+            due: tomorrow,
+            scheduled_days: Math.max(1, card.scheduled_days),
+        };
+    }
+
+    return card;
+}

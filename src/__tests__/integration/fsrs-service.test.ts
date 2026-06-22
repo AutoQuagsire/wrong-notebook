@@ -225,5 +225,46 @@ describe("FSRS Service", () => {
                 processFsrsReview(userId, errorItemId, null as unknown as number)
             ).rejects.toThrow("Rating is required");
         });
+
+        it("Rating 1 (Again) 后 due 不应在同一天", async () => {
+            mocks.mockFsrsCard.findUnique.mockResolvedValue(null);
+            mocks.mockFsrsCard.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+                id: "card-again",
+                ...args.data,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }));
+            mocks.mockFsrsCard.update.mockResolvedValue({});
+
+            const now = new Date();
+            const result = await processFsrsReview(userId, errorItemId, 1);
+
+            // due should be at least tomorrow 00:00 local time
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(6, 0, 0, 0);
+            expect(result.due.getTime()).toBeGreaterThanOrEqual(tomorrow.getTime());
+            expect(result.scheduled_days).toBeGreaterThanOrEqual(1);
+        });
+
+        it("Rating 3 (Good) 后 due 应已在未来", async () => {
+            mocks.mockFsrsCard.findUnique.mockResolvedValue(null);
+            mocks.mockFsrsCard.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+                id: "card-good",
+                ...args.data,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }));
+            mocks.mockFsrsCard.update.mockResolvedValue({});
+
+            const now = new Date();
+            const result = await processFsrsReview(userId, errorItemId, 3);
+
+            // Good rating should schedule at least tomorrow or later
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(6, 0, 0, 0);
+            expect(result.due.getTime()).toBeGreaterThanOrEqual(tomorrow.getTime());
+        });
     });
 });

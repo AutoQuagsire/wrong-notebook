@@ -1482,5 +1482,54 @@ describe('/api/practice', () => {
             // Duplicate returns the existing record as-is, no processFsrsReview called
             expect(data.reviewResult).toBeUndefined();
         });
+
+        it('Rating 1 (Again) 的 reviewResult.nextReviewAt 应至少是明天', async () => {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(6, 0, 0, 0);
+
+            mocks.mockProcessFsrsReview.mockResolvedValueOnce({
+                // Simulate FSRS returned 15 minutes later, but clamped to tomorrow
+                due: tomorrow,
+                scheduled_days: 1,
+                state: "Learning",
+                reps: 1,
+                lapses: 1,
+                stability: 1.0,
+                difficulty: 0.5,
+                elapsed_days: 0,
+                last_review: new Date(),
+            });
+
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-again',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating: 1,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.reviewResult).toBeDefined();
+
+            const nextDate = new Date(data.reviewResult.nextReviewAt);
+            expect(nextDate.getTime()).toBeGreaterThanOrEqual(tomorrow.getTime());
+
+            // Verify local calendar date is tomorrow or later
+            const nowDate = new Date();
+            const nextDay = new Date(nextDate);
+            const isTomorrowOrLater =
+                nextDay.getFullYear() > nowDate.getFullYear() ||
+                nextDay.getMonth() > nowDate.getMonth() ||
+                nextDay.getDate() >= nowDate.getDate() + 1;
+            expect(isTomorrowOrLater).toBe(true);
+        });
     });
 });

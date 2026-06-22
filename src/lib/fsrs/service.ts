@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { createNewCard, computeNextCard, validateFsrsRating } from "./adapter";
+import { createNewCard, computeNextCard, validateFsrsRating, clampDueToNextDay } from "./adapter";
 import type { FsrsCardData } from "./adapter";
 import type { PrismaClient } from "@prisma/client";
 
@@ -130,7 +130,10 @@ export async function processFsrsReview(
     const card = await getOrCreateFsrsCard(userId, errorItemId, tx);
 
     // Compute next state (pure function, no DB)
-    const nextCard = computeNextCard(card, rating, now);
+    const computedCard = computeNextCard(card, rating, now);
+
+    // Clamp: never schedule the next review on the same calendar day
+    const nextCard = clampDueToNextDay(computedCard, now);
 
     // Persist the update
     await saveFsrsCard(card.id, nextCard, tx);
