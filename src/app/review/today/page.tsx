@@ -15,11 +15,13 @@ import {
     Sparkles,
     AlertTriangle,
     House,
+    CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BackButton } from "@/components/ui/back-button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import type { ReviewTodayResponse, ReviewTodayItem } from "@/types/api";
@@ -303,6 +305,39 @@ export default function ReviewTodayPage() {
                                 <div className="text-3xl font-bold">{stats.newCount}</div>
                             </CardContent>
                         </Card>
+                    </div>
+                )}
+
+                {/* Upcoming 7-day preview */}
+                {stats?.upcoming && stats.upcoming.length > 0 && (
+                    <div className="flex justify-end">
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                    <CalendarDays className="mr-1.5 h-4 w-4" />
+                                    未来复习安排
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-sm">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2">
+                                        <CalendarDays className="h-5 w-5 text-muted-foreground" />
+                                        未来 7 天复习安排
+                                    </DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-1 pt-2">
+                                    {stats.upcoming.map((day) => (
+                                        <div
+                                            key={day.date}
+                                            className="flex items-center justify-between rounded-md px-3 py-2 text-sm hover:bg-muted/50"
+                                        >
+                                            <span className="text-muted-foreground">{day.date}</span>
+                                            <span className="font-semibold tabular-nums">{day.count} 题</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </DialogContent>
+                        </Dialog>
                     </div>
                 )}
 

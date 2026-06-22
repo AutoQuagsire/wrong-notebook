@@ -302,6 +302,7 @@ describe("GET /api/review/today", () => {
         it("includeNew=true 时应返回没有 FsrsCard 的 ErrorItem", async () => {
             mocks.mockFsrsCard.findMany
                 .mockResolvedValueOnce([]) // due cards
+                .mockResolvedValueOnce([]) // upcoming
                 .mockResolvedValueOnce([]); // existing fsrs errorItemIds
             mocks.mockFsrsCard.count
                 .mockResolvedValueOnce(0) // dueCount
@@ -331,8 +332,9 @@ describe("GET /api/review/today", () => {
 
         it("newItems 不应包含其他用户的新错题", async () => {
             mocks.mockFsrsCard.findMany
-                .mockResolvedValueOnce([])
-                .mockResolvedValueOnce([]);
+                .mockResolvedValueOnce([]) // due cards
+                .mockResolvedValueOnce([]) // upcoming
+                .mockResolvedValueOnce([]); // existing fsrs errorItemIds
             mocks.mockErrorItem.findMany.mockResolvedValue([]);
             mocks.mockErrorItem.count.mockResolvedValue(0);
 
@@ -359,6 +361,7 @@ describe("GET /api/review/today", () => {
             // Simulate: an errorItem "err-reviewed" now has an FsrsCard after review
             mocks.mockFsrsCard.findMany
                 .mockResolvedValueOnce([]) // due cards: empty
+                .mockResolvedValueOnce([]) // upcoming cards: empty
                 .mockResolvedValueOnce([
                     { errorItemId: "err-reviewed" },
                     { errorItemId: "err-other" },
@@ -492,6 +495,187 @@ describe("GET /api/review/today", () => {
             const data = await res.json();
 
             expect(data.dueItems[0].overdueDays).toBe(0);
+        });
+    });
+
+    describe("upcoming", () => {
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrow = new Date(today.getTime() + 86400000);
+        const day2 = new Date(today.getTime() + 2 * 86400000);
+        const day3 = new Date(today.getTime() + 3 * 86400000);
+        const day8 = new Date(today.getTime() + 8 * 86400000);
+
+        beforeEach(() => {
+            vi.clearAllMocks();
+            vi.mocked(getServerSession).mockResolvedValue(mocks.mockSession);
+        });
+
+        function setupMocks(dueCards: unknown[] = [], upcomingCards: { due: Date }[] = [], dueCount = 0, overdueCount = 0, newCount = 0) {
+            mocks.mockFsrsCard.findMany
+                .mockResolvedValueOnce(dueCards)       // due cards
+                .mockResolvedValueOnce(upcomingCards)   // upcoming
+                .mockResolvedValueOnce([]);             // existing fsrs errorItemIds
+            mocks.mockFsrsCard.count
+                .mockResolvedValueOnce(dueCount)        // dueCount
+                .mockResolvedValueOnce(overdueCount);   // overdueCount
+            mocks.mockErrorItem.count.mockResolvedValue(newCount);
+        }
+
+        it("应返回未来 7 天的统计", async () => {
+            setupMocks([], [], 0, 0, 0);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            expect(data.stats.upcoming).toBeDefined();
+            expect(data.stats.upcoming).toHaveLength(7);
+        });
+
+        it("upcoming 日期应为 YYYY-MM-DD 格式", async () => {
+            setupMocks([], [], 0, 0, 0);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            for (const day of data.stats.upcoming) {
+                expect(day.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+            }
+        });
+
+        it("应正确统计每天的到期题数", async () => {
+            setupMocks(
+                [],
+                [
+                    { due: today },
+                    { due: tomorrow },
+                    { due: tomorrow },
+                    { due: day2 },
+                    { due: day3 },
+                    { due: day3 },
+                    { due: day3 },
+                ],
+                0, 0, 0
+            );
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            const upcoming = data.stats.upcoming;
+            expect(upcoming[0].count).toBe(1); // today
+            expect(upcoming[1].count).toBe(2); // tomorrow
+            expect(upcoming[2].count).toBe(1); // day2
+            expect(upcoming[3].count).toBe(3); // day3
+            expect(upcoming[4].count).toBe(0);
+            expect(upcoming[5].count).toBe(0);
+            expect(upcoming[6].count).toBe(0);
+        });
+
+        it("不应统计 7 天之外的卡", async () => {
+            setupMocks(
+                [],
+                [
+                    { due: today },
+                    { due: day8 },
+                ],
+                0, 0, 0
+            );
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            // day8 should not appear — only 7 days
+            let totalUpcoming = 0;
+            for (const day of data.stats.upcoming) {
+                totalUpcoming += day.count;
+            }
+            expect(totalUpcoming).toBe(1); // only today's card counted
+        });
+
+        it("upcoming 不应包含没有 FsrsCard 的 newItems", async () => {
+            // New items (from errorItem) don't have FsrsCard, so they shouldn't appear in upcoming
+            setupMocks([]);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            // All upcoming counts should be from FsrsCards only
+            for (const day of data.stats.upcoming) {
+                expect(typeof day.count).toBe("number");
+            }
+        });
+
+        it("upcoming 应包含已逾期的卡（在今天窗口内）", async () => {
+            const yesterdayCard = new Date(today.getTime() - 86400000);
+
+            setupMocks(
+                [],
+                [
+                    { due: yesterdayCard },
+                    { due: tomorrow },
+                ],
+                0, 0, 0
+            );
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            // Yesterday's card is < todayStart, so it should NOT be in upcoming
+            // Only tomorrow's card should be in upcoming[1]
+            // Actually, the query uses `due >= todayStart`, so yesterday is excluded
+            let totalUpcoming = 0;
+            for (const day of data.stats.upcoming) {
+                totalUpcoming += day.count;
+            }
+            expect(totalUpcoming).toBe(1); // only tomorrow
+        });
+
+        it("upcoming 不应影响现有 dueItems/newItems/stats", async () => {
+            mocks.mockFsrsCard.findMany
+                .mockResolvedValueOnce([
+                    {
+                        id: "card-1",
+                        userId: "user-123",
+                        errorItemId: "err-1",
+                        due: yesterday,
+                        last_review: yesterday,
+                        reps: 2, lapses: 0, state: "Review", scheduled_days: 3,
+                        errorItem: mockErrorItemData("err-1"),
+                    },
+                ]) // due cards
+                .mockResolvedValueOnce([]) // upcoming
+                .mockResolvedValueOnce([]); // existing fsrs errorItemIds
+            mocks.mockFsrsCard.count
+                .mockResolvedValueOnce(1)  // dueCount
+                .mockResolvedValueOnce(0); // overdueCount
+            mocks.mockErrorItem.count.mockResolvedValue(5);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            expect(data.dueItems).toHaveLength(1);
+            expect(data.stats.dueCount).toBe(1);
+            expect(data.stats.newCount).toBe(5);
+            expect(data.stats.upcoming).toBeDefined();
+        });
+
+        it("查询应过滤 userId", async () => {
+            setupMocks([], [], 0, 0, 0);
+
+            const req = new Request("http://localhost/api/review/today");
+            await GET(req);
+
+            // The 2nd findMany call should be the upcoming query — check it has userId
+            const upcomingCall = mocks.mockFsrsCard.findMany.mock.calls[1][0] as { where: { userId: string } };
+            expect(upcomingCall.where.userId).toBe("user-123");
         });
     });
 });

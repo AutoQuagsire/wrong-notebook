@@ -197,6 +197,11 @@ export interface ReviewTodayItem {
     overdueDays?: number;
 }
 
+export interface UpcomingReviewDay {
+    date: string;
+    count: number;
+}
+
 export interface ReviewTodayResponse {
     dueItems: ReviewTodayItem[];
     newItems: ReviewTodayItem[];
@@ -206,6 +211,7 @@ export interface ReviewTodayResponse {
         newCount: number;
         limit: number;
         generatedAt: string;
+        upcoming?: UpcomingReviewDay[];
     };
 }
 
