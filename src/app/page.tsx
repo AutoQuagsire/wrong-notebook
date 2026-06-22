@@ -13,7 +13,7 @@ import { AnalyzeResponse, Notebook, AppConfig } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { processImageFile } from "@/lib/image-utils";
-import { Upload, BookOpen, Tags, LogOut, BarChart3, PenLine } from "lucide-react";
+import { Upload, BookOpen, Tags, LogOut, BarChart3, PenLine, BookMarked } from "lucide-react";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { BroadcastNotification } from "@/components/broadcast-notification";
 import { signOut } from "next-auth/react";
@@ -499,6 +499,19 @@ function HomeContent() {
                                     <div className="flex items-center gap-2">
                                         <Tags className="h-5 w-5" />
                                         <span>{t.app?.tags || 'Tags'}</span>
+                                    </div>
+                                </Button>
+                            </Link>
+
+                            <Link href="/review/today" className="w-full">
+                                <Button
+                                    variant="outline"
+                                    size="lg"
+                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <BookMarked className="h-5 w-5" />
+                                        <span>今日复习</span>
                                     </div>
                                 </Button>
                             </Link>
