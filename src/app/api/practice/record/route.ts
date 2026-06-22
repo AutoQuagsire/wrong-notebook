@@ -250,7 +250,7 @@ export async function POST(req: Request) {
                 return NextResponse.json(duplicateRecord);
             }
 
-            const [record] = await prisma.$transaction(async (tx) => {
+            const [record, fsrsResult] = await prisma.$transaction(async (tx) => {
                 const created = await tx.practiceRecord.create({
                     data: {
                         userId,
@@ -268,12 +268,23 @@ export async function POST(req: Request) {
                     },
                 });
 
-                await processFsrsReview(userId, errorItemId, normalizedRating, tx);
+                const updatedCard = await processFsrsReview(userId, errorItemId, normalizedRating, tx);
 
-                return [created];
+                return [created, updatedCard];
             });
 
-            return NextResponse.json(record);
+            const responseBody = {
+                ...record,
+                reviewResult: {
+                    nextReviewAt: fsrsResult.due.toISOString(),
+                    scheduledDays: fsrsResult.scheduled_days,
+                    state: fsrsResult.state,
+                    reps: fsrsResult.reps,
+                    lapses: fsrsResult.lapses,
+                },
+            };
+
+            return NextResponse.json(responseBody);
         }
 
         const record = await prisma.practiceRecord.create({

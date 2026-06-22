@@ -153,6 +153,14 @@ export interface PracticeStatsData {
     overallStats: { total: number; correct: number; rate: string };
 }
 
+export interface ReviewResultData {
+    nextReviewAt: string;
+    scheduledDays: number;
+    state: string;
+    reps: number;
+    lapses: number;
+}
+
 export interface PracticeRecordData {
     id: string;
     userId: string;
@@ -168,6 +176,7 @@ export interface PracticeRecordData {
     answerText?: string | null;
     answerImageUrl?: string | null;
     createdAt: string;
+    reviewResult?: ReviewResultData;
 }
 
 export interface ReviewTodayItem {
