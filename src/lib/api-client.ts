@@ -40,10 +40,11 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
 
         if (!res.ok) {
             let errorData;
+            const bodyText = await res.text();
             try {
-                errorData = await res.json();
+                errorData = JSON.parse(bodyText);
             } catch {
-                errorData = await res.text();
+                errorData = bodyText;
             }
             throw new ApiError(res.status, res.statusText, errorData);
         }
