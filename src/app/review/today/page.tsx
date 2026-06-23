@@ -87,9 +87,9 @@ function OverdueBadge({ overdueDays, due }: { overdueDays?: number; due?: string
 function DueItemCard({ item }: { item: ReviewTodayItem }) {
     return (
         <Card className={`transition-all hover:border-primary/40 hover:shadow-md ${item.overdueDays && item.overdueDays > 0 ? "border-red-200 bg-red-50/30" : ""}`}>
-            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+            <CardContent className="flex flex-col gap-4 overflow-hidden p-4 sm:flex-row sm:items-start sm:justify-between">
                 {/* Left: content */}
-                <div className="min-w-0 flex-1 space-y-2">
+                <div className="min-w-0 flex-1 space-y-2 overflow-hidden">
                     <div className="flex flex-wrap items-center gap-2">
                         {item.subject ? (
                             <Badge variant="secondary" className="shrink-0">{item.subject.name}</Badge>
@@ -97,7 +97,7 @@ function DueItemCard({ item }: { item: ReviewTodayItem }) {
                         <StateBadge state={item.state} />
                         <OverdueBadge overdueDays={item.overdueDays} due={item.due} />
                     </div>
-                    <div className="text-base font-medium leading-7 text-foreground line-clamp-3 overflow-hidden [&_.katex]:text-[1.05em]">
+                    <div className="min-w-0 overflow-hidden break-words text-base font-medium leading-7 text-foreground line-clamp-3 [&_.katex]:text-[1.05em]">
                         <MarkdownRenderer content={item.questionPreview} />
                     </div>
                     {item.originalImageUrl ? (
@@ -107,10 +107,10 @@ function DueItemCard({ item }: { item: ReviewTodayItem }) {
                             width={640}
                             height={240}
                             unoptimized
-                            className="max-h-40 w-full max-w-md rounded-md border object-contain sm:max-w-sm"
+                            className="max-h-40 w-full max-w-full rounded-md border object-contain sm:max-w-sm"
                         />
                     ) : null}
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span>复习 {item.reps ?? 0} 次</span>
                         <span>遗忘 {item.lapses ?? 0} 次</span>
                         <span>到期：{formatDate(item.due)}</span>
@@ -133,21 +133,21 @@ function DueItemCard({ item }: { item: ReviewTodayItem }) {
 function NewItemCard({ item }: { item: ReviewTodayItem }) {
     return (
         <Card className="border-dashed border-muted-foreground/30 hover:border-primary/40 transition-all">
-            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex items-center gap-2">
+            <CardContent className="flex flex-col gap-4 overflow-hidden p-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-2 overflow-hidden">
+                    <div className="flex flex-wrap items-center gap-2">
                         {item.subject ? (
                             <Badge variant="outline" className="shrink-0">{item.subject.name}</Badge>
                         ) : null}
                         <Badge variant="secondary" className="bg-blue-50 text-blue-700">新错题</Badge>
                     </div>
-                    <div className="text-base font-medium leading-7 text-foreground line-clamp-3 overflow-hidden [&_.katex]:text-[1.05em]">
+                    <div className="min-w-0 overflow-hidden break-words text-base font-medium leading-7 text-foreground line-clamp-3 [&_.katex]:text-[1.05em]">
                         <MarkdownRenderer content={item.questionPreview} />
                     </div>
                 </div>
                 <div className="shrink-0 pt-1">
                     <Link href={`/review/${item.errorItemId}?from=today`}>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" className="w-full sm:w-auto">
                             <PlayCircle className="mr-1.5 h-4 w-4" />
                             开始复习
                         </Button>
@@ -248,20 +248,20 @@ export default function ReviewTodayPage() {
         <main className="min-h-screen bg-background">
             <div className="container mx-auto space-y-6 px-4 py-8 pb-20">
                 {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-start justify-between gap-3 sm:flex-nowrap sm:items-center">
+                    <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
                         <BackButton fallbackUrl="/" />
-                        <div>
-                            <h1 className="text-2xl font-bold flex items-center gap-2">
-                                <BookOpen className="h-6 w-6" />
+                        <div className="min-w-0">
+                            <h1 className="flex min-w-0 items-center gap-2 text-2xl font-bold">
+                                <BookOpen className="h-6 w-6 shrink-0" />
                                 今日复习
                             </h1>
-                            <p className="text-sm text-muted-foreground mt-1">
+                            <p className="mt-1 break-words text-sm text-muted-foreground">
                                 根据 FSRS 到期时间安排今天需要复习的错题
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:flex-none">
                         <Button variant="ghost" size="icon" onClick={handleRefresh} disabled={loading} title="刷新">
                             <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
                         </Button>
@@ -318,7 +318,7 @@ export default function ReviewTodayPage() {
                                     未来复习安排
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-sm">
+                            <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-sm">
                                 <DialogHeader>
                                     <DialogTitle className="flex items-center gap-2">
                                         <CalendarDays className="h-5 w-5 text-muted-foreground" />
@@ -344,15 +344,15 @@ export default function ReviewTodayPage() {
                 {/* Primary action */}
                 {hasDue && firstDueItem && (
                     <Card className="border-primary/40 bg-primary/5">
-                        <CardContent className="flex items-center justify-between py-5">
-                            <div className="space-y-1">
+                        <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 space-y-1">
                                 <p className="font-medium">开始今日复习</p>
-                                <p className="text-sm text-muted-foreground">
+                                <p className="break-words text-sm text-muted-foreground">
                                     第一题：{firstDueItem.subject?.name || "未知"} &mdash; {firstDueItem.questionPreview.slice(0, 40)}&hellip;
                                 </p>
                             </div>
                             <Link href={`/review/${firstDueItem.errorItemId}?from=today`}>
-                                <Button size="lg">
+                                <Button size="lg" className="w-full sm:w-auto">
                                     <PlayCircle className="mr-2 h-5 w-5" />
                                     开始复习
                                 </Button>
@@ -378,15 +378,15 @@ export default function ReviewTodayPage() {
                                     </p>
                                 )}
                             </div>
-                            <div className="flex gap-3 pt-2">
+                            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                                 {stats && stats.newCount > 0 && !includeNew && (
-                                    <Button size="lg" onClick={handleToggleIncludeNew}>
+                                    <Button size="lg" onClick={handleToggleIncludeNew} className="w-full sm:w-auto">
                                         <Sparkles className="mr-2 h-4 w-4" />
                                         查看新错题候选
                                     </Button>
                                 )}
                                 <Link href="/notebooks">
-                                    <Button variant="outline">
+                                    <Button variant="outline" className="w-full sm:w-auto">
                                         <BookOpen className="mr-2 h-4 w-4" />
                                         查看错题本
                                     </Button>
