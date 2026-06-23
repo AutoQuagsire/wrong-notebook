@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -26,18 +26,8 @@ export function TagInput({ value = [], onChange, placeholder = "Enter tags...", 
     const suggestionsRef = useRef<HTMLDivElement>(null);
 
     // 获取标签建议
-    useEffect(() => {
-        if (input.trim()) {
-            fetchSuggestions(input);
-        } else {
-            setSuggestions([]);
-            setShowSuggestions(false);
-        }
-    }, [input, subject, gradeStage]);
-
-    const fetchSuggestions = async (query: string) => {
+    const fetchSuggestions = useCallback(async (query: string) => {
         try {
-            // 从服务器获取标签建议（现在从数据库查询）
             const params = new URLSearchParams({ q: query });
             if (subject) {
                 params.append('subject', subject);
@@ -48,7 +38,6 @@ export function TagInput({ value = [], onChange, placeholder = "Enter tags...", 
             const data = await apiClient.get<TagSuggestionsResponse>(`/api/tags/suggestions?${params.toString()}`);
             const serverSuggestions = data.suggestions || [];
 
-            // 过滤已选中的标签
             const filtered = serverSuggestions.filter(
                 (tag) => !value.includes(tag)
             );
@@ -59,7 +48,16 @@ export function TagInput({ value = [], onChange, placeholder = "Enter tags...", 
         } catch (error) {
             console.error("Failed to fetch suggestions:", error);
         }
-    };
+    }, [subject, gradeStage, value]);
+
+    useEffect(() => {
+        if (input.trim()) {
+            fetchSuggestions(input);
+        } else {
+            setSuggestions([]);
+            setShowSuggestions(false);
+        }
+    }, [input, fetchSuggestions]);
 
     const addTag = (tag: string) => {
         if (tag.trim() && !value.includes(tag.trim())) {

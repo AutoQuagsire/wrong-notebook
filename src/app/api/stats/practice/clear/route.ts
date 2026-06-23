@@ -14,7 +14,6 @@ export async function DELETE(req: Request) {
         return unauthorized();
     }
 
-    // @ts-ignore
     const userId = session.user.id;
 
     try {

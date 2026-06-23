@@ -84,7 +84,7 @@ export function PracticeStats() {
 
     // Helper to translate difficulty
     const getDifficultyLabel = (key: string) => {
-        // @ts-ignore
+        // @ts-expect-error — translation object has dynamic nested keys
         return t.practice?.difficulty?.[key] || key;
     };
 

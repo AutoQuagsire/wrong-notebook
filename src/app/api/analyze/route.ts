@@ -23,7 +23,8 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        let { imageBase64, mimeType, language, subjectId } = body;
+        const { language, subjectId } = body;
+        let { imageBase64, mimeType } = body;
 
         logger.debug({
             imageLength: imageBase64?.length,
