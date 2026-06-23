@@ -31,6 +31,22 @@ function getErrorMessage(error: unknown): string {
     return "加载失败";
 }
 
+function cleanMathPreview(text: string): string {
+    return text
+        .replace(/\$/g, "")
+        .replace(/\\sqrt\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, "√($1)")
+        .replace(/\\frac\s*\{([^{}]+)}\{([^{}]+)}/g, "($1)/($2)")
+        .replace(/\\left\|\\right\|/g, "")
+        .replace(/\\left\|\\right/g, "")
+        .replace(/\\(?:sin|cos|tan|lim|log|ln|int|sum|prod|cdot|times|div|pm|mp|infty|alpha|beta|gamma|delta|epsilon|theta|pi|sigma|omega)\b/g, match => match.slice(1))
+        .replace(/\\begin\{[^}]+}|\\end\{[^}]+}/g, "")
+        .replace(/\\[a-zA-Z]+\b/g, "")
+        .replace(/[{}]/g, "")
+        .replace(/\\/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 export default function ReviewTodayPage() {
     const [data, setData] = useState<ReviewTodayResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -225,7 +241,7 @@ export default function ReviewTodayPage() {
                             <div className="min-w-0 space-y-1">
                                 <p className="font-medium">开始今日复习</p>
                                 <p className="break-words text-sm text-muted-foreground">
-                                    第一题：{firstReviewItem.subject?.name || "未知"} &mdash; {firstReviewItem.questionPreview.slice(0, 40)}&hellip;
+                                    第一题：{firstReviewItem.subject?.name || "未知"} &mdash; {cleanMathPreview(firstReviewItem.questionPreview).slice(0, 40)}&hellip;
                                 </p>
                             </div>
                             <Link href={`/review/${firstReviewItem.errorItemId}?from=today`} className="w-full">
