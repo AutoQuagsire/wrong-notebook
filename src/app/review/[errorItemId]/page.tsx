@@ -463,7 +463,7 @@ export default function ReviewPage() {
                                         <Button
                                             key={option.value}
                                             variant={option.variant}
-                                            className="h-auto whitespace-normal py-2.5 sm:py-3 text-left text-sm sm:text-base"
+                                            className="h-auto min-h-[44px] whitespace-normal py-2.5 sm:py-3 text-left text-sm sm:text-base"
                                             disabled={isSubmitting || !!savedRecord}
                                             onClick={() => handleSubmitRating(option.value)}
                                         >
