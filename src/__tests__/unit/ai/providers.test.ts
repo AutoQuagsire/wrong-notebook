@@ -170,7 +170,7 @@ describe('AI Provider 初始化', () => {
             vi.mocked(getAppConfig).mockReturnValue({
                 aiProvider: 'unknown',
                 gemini: { apiKey: 'test-gemini-key' },
-            } as import("@/types/api").AppConfig);
+            } as unknown as import("@/types/api").AppConfig);
 
             const service = getAIService();
 

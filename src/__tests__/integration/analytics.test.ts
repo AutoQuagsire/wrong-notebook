@@ -177,7 +177,7 @@ describe('/api/analytics', () => {
             vi.mocked(getServerSession).mockResolvedValue({
                 user: undefined,
                 expires: '2025-12-31',
-            } as import("next-auth").Session);
+            } as unknown as import("next-auth").Session);
 
             const request = new Request('http://localhost/api/analytics');
             const response = await GET(request);

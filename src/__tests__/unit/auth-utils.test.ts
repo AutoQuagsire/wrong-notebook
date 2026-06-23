@@ -57,7 +57,7 @@ describe('auth-utils', () => {
             const session = {
                 user: undefined,
                 expires: '2025-12-31',
-            } as import("next-auth").Session;
+            } as unknown as import("next-auth").Session;
             expect(requireAdmin(session)).toBe(false);
         });
     });
