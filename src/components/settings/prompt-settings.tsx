@@ -51,7 +51,10 @@ export function PromptSettings({ config, onUpdate }: PromptSettingsProps) {
     const [similarTemplate, setSimilarTemplate] = useState("");
 
     useEffect(() => {
+        // Sync saved prompts config into local editable draft state.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setAnalyzeTemplate(config.prompts?.analyze || DEFAULT_ANALYZE_TEMPLATE);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSimilarTemplate(config.prompts?.similar || DEFAULT_SIMILAR_TEMPLATE);
     }, [config.prompts]);
 
