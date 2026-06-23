@@ -163,8 +163,6 @@ export default function ReviewTodayPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [includeNew, setIncludeNew] = useState(false);
-    const [showTodayPlanItems, setShowTodayPlanItems] = useState(false);
-    const [showOverdueItems, setShowOverdueItems] = useState(false);
 
     const fetchData = async (withNew: boolean) => {
         setLoading(true);
@@ -282,52 +280,57 @@ export default function ReviewTodayPage() {
                 {/* Stats Cards */}
                 {stats && (
                     <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
-                                <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
-                                    今日计划
-                                </CardTitle>
-                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600 sm:h-4 sm:w-4" />
-                            </CardHeader>
-                            <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
-                                <div className="text-2xl font-bold leading-none sm:text-3xl">{todayPlanItems.length}</div>
-                            </CardContent>
-                        </Card>
-                        <Card
-                            className={hasOverdueItems ? "cursor-pointer transition hover:border-red-300 hover:bg-red-50/40" : ""}
-                            onClick={hasOverdueItems ? () => setShowOverdueItems((prev) => !prev) : undefined}
-                            onKeyDown={hasOverdueItems ? (event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault();
-                                    setShowOverdueItems((prev) => !prev);
-                                }
-                            } : undefined}
-                            role={hasOverdueItems ? "button" : undefined}
-                            tabIndex={hasOverdueItems ? 0 : undefined}
+                        <Link
+                            href="/review/today/plan"
+                            className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
-                            <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
-                                <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
-                                    已逾期
-                                </CardTitle>
-                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500 sm:h-4 sm:w-4" />
-                            </CardHeader>
-                            <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
-                                <div className={`text-2xl font-bold leading-none sm:text-3xl ${overdueItems.length > 0 ? "text-red-600" : ""}`}>
-                                    {overdueItems.length}
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card className={includeNew ? "border-primary/40 bg-primary/5" : ""}>
-                            <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
-                                <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
-                                    新错题候选
-                                </CardTitle>
-                                <Sparkles className="h-3.5 w-3.5 shrink-0 text-blue-500 sm:h-4 sm:w-4" />
-                            </CardHeader>
-                            <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
-                                <div className="text-2xl font-bold leading-none sm:text-3xl">{stats.newCount}</div>
-                            </CardContent>
-                        </Card>
+                            <Card className="cursor-pointer transition hover:border-primary/40 hover:bg-primary/5">
+                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                    <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
+                                        今日计划
+                                    </CardTitle>
+                                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600 sm:h-4 sm:w-4" />
+                                </CardHeader>
+                                <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
+                                    <div className="text-2xl font-bold leading-none sm:text-3xl">{todayPlanItems.length}</div>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                        <Link
+                            href="/review/today/overdue"
+                            className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <Card className="cursor-pointer transition hover:border-red-300 hover:bg-red-50/40">
+                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                    <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
+                                        已逾期
+                                    </CardTitle>
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500 sm:h-4 sm:w-4" />
+                                </CardHeader>
+                                <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
+                                    <div className={`text-2xl font-bold leading-none sm:text-3xl ${overdueItems.length > 0 ? "text-red-600" : ""}`}>
+                                        {overdueItems.length}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={handleToggleIncludeNew}
+                            className="rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <Card className={`cursor-pointer transition hover:border-primary/40 hover:bg-primary/5 ${includeNew ? "border-primary/40 bg-primary/5" : ""}`}>
+                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                    <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
+                                        新错题候选
+                                    </CardTitle>
+                                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-blue-500 sm:h-4 sm:w-4" />
+                                </CardHeader>
+                                <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
+                                    <div className="text-2xl font-bold leading-none sm:text-3xl">{stats.newCount}</div>
+                                </CardContent>
+                            </Card>
+                        </button>
                     </div>
                 )}
 
@@ -417,75 +420,6 @@ export default function ReviewTodayPage() {
                             </div>
                         </CardContent>
                     </Card>
-                )}
-
-                {/* Today plan entry */}
-                <section className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-semibold">今日计划</h2>
-                        <span className="text-sm text-muted-foreground">{todayPlanItems.length} 条</span>
-                    </div>
-                    {hasTodayPlan ? (
-                        <>
-                            <Card
-                                className="cursor-pointer transition hover:border-primary/40 hover:bg-primary/5"
-                                onClick={() => setShowTodayPlanItems((prev) => !prev)}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter" || event.key === " ") {
-                                        event.preventDefault();
-                                        setShowTodayPlanItems((prev) => !prev);
-                                    }
-                                }}
-                                role="button"
-                                tabIndex={0}
-                            >
-                                <CardContent className="flex items-center justify-between gap-3 p-4">
-                                    <div className="min-w-0">
-                                        <p className="font-medium">查看今日计划（{todayPlanItems.length}）</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            点击后查看今天计划复习的具体题目
-                                        </p>
-                                    </div>
-                                    {showTodayPlanItems ? (
-                                        <ChevronUp className="h-5 w-5 shrink-0 text-muted-foreground" />
-                                    ) : (
-                                        <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
-                                    )}
-                                </CardContent>
-                            </Card>
-                            {showTodayPlanItems && (
-                                <div className="space-y-3">
-                                    {todayPlanItems.map((item) => (
-                                        <DueItemCard key={item.errorItemId} item={item} />
-                                    ))}
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <Card className="border-dashed">
-                            <CardContent className="py-6 text-center text-sm text-muted-foreground">
-                                今天没有计划复习题{hasOverdueItems ? "，可以先查看上方的已逾期题。" : "。"}
-                            </CardContent>
-                        </Card>
-                    )}
-                </section>
-
-                {/* Overdue items list */}
-                {hasOverdueItems && showOverdueItems && (
-                    <section className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h2 className="flex items-center gap-2 text-lg font-semibold text-red-700">
-                                <AlertTriangle className="h-4 w-4" />
-                                已逾期
-                            </h2>
-                            <span className="text-sm text-muted-foreground">{overdueItems.length} 条</span>
-                        </div>
-                        <div className="space-y-3">
-                            {overdueItems.map((item) => (
-                                <DueItemCard key={item.errorItemId} item={item} />
-                            ))}
-                        </div>
-                    </section>
                 )}
 
                 {/* Include new toggle */}
