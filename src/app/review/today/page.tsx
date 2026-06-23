@@ -275,34 +275,40 @@ export default function ReviewTodayPage() {
 
                 {/* Stats Cards */}
                 {stats && (
-                    <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4">
                         <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">今日待复习</CardTitle>
-                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
+                                    今日待复习
+                                </CardTitle>
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600 sm:h-4 sm:w-4" />
                             </CardHeader>
-                            <CardContent>
-                                <div className="text-3xl font-bold">{stats.dueCount}</div>
+                            <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
+                                <div className="text-2xl font-bold leading-none sm:text-3xl">{stats.dueCount}</div>
                             </CardContent>
                         </Card>
                         <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">已逾期</CardTitle>
-                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                            <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
+                                    已逾期
+                                </CardTitle>
+                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500 sm:h-4 sm:w-4" />
                             </CardHeader>
-                            <CardContent>
-                                <div className={`text-3xl font-bold ${stats.overdueCount > 0 ? "text-red-600" : ""}`}>
+                            <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
+                                <div className={`text-2xl font-bold leading-none sm:text-3xl ${stats.overdueCount > 0 ? "text-red-600" : ""}`}>
                                     {stats.overdueCount}
                                 </div>
                             </CardContent>
                         </Card>
                         <Card className={includeNew ? "border-primary/40 bg-primary/5" : ""}>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">新错题候选</CardTitle>
-                                <Sparkles className="h-4 w-4 text-blue-500" />
+                            <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
+                                    新错题候选
+                                </CardTitle>
+                                <Sparkles className="h-3.5 w-3.5 shrink-0 text-blue-500 sm:h-4 sm:w-4" />
                             </CardHeader>
-                            <CardContent>
-                                <div className="text-3xl font-bold">{stats.newCount}</div>
+                            <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
+                                <div className="text-2xl font-bold leading-none sm:text-3xl">{stats.newCount}</div>
                             </CardContent>
                         </Card>
                     </div>
@@ -344,15 +350,15 @@ export default function ReviewTodayPage() {
                 {/* Primary action */}
                 {hasDue && firstDueItem && (
                     <Card className="border-primary/40 bg-primary/5">
-                        <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+                        <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
                             <div className="min-w-0 space-y-1">
                                 <p className="font-medium">开始今日复习</p>
                                 <p className="break-words text-sm text-muted-foreground">
                                     第一题：{firstDueItem.subject?.name || "未知"} &mdash; {firstDueItem.questionPreview.slice(0, 40)}&hellip;
                                 </p>
                             </div>
-                            <Link href={`/review/${firstDueItem.errorItemId}?from=today`}>
-                                <Button size="lg" className="w-full sm:w-auto">
+                            <Link href={`/review/${firstDueItem.errorItemId}?from=today`} className="w-full">
+                                <Button size="lg" className="h-14 w-full text-base font-semibold">
                                     <PlayCircle className="mr-2 h-5 w-5" />
                                     开始复习
                                 </Button>
