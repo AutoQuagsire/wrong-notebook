@@ -180,11 +180,13 @@ describe('/api/settings', () => {
 
             expect(response.status).toBe(200);
             // 验证更新时保留了原有的 key
-            const updateCall = mocks.mockUpdateAppConfig.mock.calls[0][0];
+            const updateCall = mocks.mockUpdateAppConfig.mock.calls[0][0] as Record<string, unknown>;
             // OpenAI instances 应该保留，且 apiKey 应为原有值
-            expect(updateCall.openai?.instances?.length).toBe(1);
-            expect(updateCall.openai?.instances?.[0]?.apiKey).toBe('sk-test-key');
-            expect(updateCall.gemini?.apiKey).toBe('AIza-test-key');
+            const updateOpenai = updateCall.openai as { instances?: { apiKey?: string }[] } | undefined;
+            expect(updateOpenai?.instances?.length).toBe(1);
+            expect(updateOpenai?.instances?.[0]?.apiKey).toBe('sk-test-key');
+            const updateGemini = updateCall.gemini as { apiKey?: string } | undefined;
+            expect(updateGemini?.apiKey).toBe('AIza-test-key');
         });
 
         it('应该成功更新自定义提示词', async () => {

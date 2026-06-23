@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-type PrismaMockArgs = { data: Record<string, unknown> };
+type PrismaMockArgs = { data: Record<string, unknown>; where?: Record<string, unknown> };
 
 // Use vi.hoisted to ensure mocks are initialized before module imports
 const mocks = vi.hoisted(() => ({

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-type PrismaMockArgs = { data: Record<string, unknown> };
+type PrismaMockArgs = { data: Record<string, unknown>; where?: Record<string, unknown> };
 
 const mocks = vi.hoisted(() => ({
     mockUser: {
@@ -94,7 +94,7 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
             ...args.data,
         }));
         mocks.mockPrismaErrorItem.update.mockImplementation(async (args: PrismaMockArgs) => ({
-            id: args.where.id,
+            id: args.where!.id,
             ...args.data,
         }));
     });
