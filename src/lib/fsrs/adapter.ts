@@ -5,6 +5,7 @@ import {
     State,
     default_w,
 } from "ts-fsrs";
+import type { Card, Grade } from "ts-fsrs";
 
 export interface FsrsCardData {
     due: Date;
@@ -18,7 +19,7 @@ export interface FsrsCardData {
     last_review: Date | null;
 }
 
-const scheduler = fsrs(default_w);
+const scheduler = fsrs({ w: [...default_w] });
 
 const STATE_MAP: Record<number, string> = {
     [State.New]: "New",
@@ -45,7 +46,7 @@ function toFsrsCardData(card: {
     reps: number;
     lapses: number;
     state: number;
-    last_review: Date | null | undefined;
+    last_review?: Date | null;
 }): FsrsCardData {
     return {
         due: card.due,
@@ -117,7 +118,7 @@ export function computeNextCard(card: FsrsCardData, rating: number, now: Date): 
     const tsCard = toTsFsrsCard(card);
     const nowDate = new Date(now);
 
-    const result = scheduler.next(tsCard, nowDate, fsrsRating);
+    const result = scheduler.next(tsCard as unknown as Card, nowDate, fsrsRating as unknown as Grade);
 
     return toFsrsCardData(result.card);
 }
