@@ -507,19 +507,6 @@ function HomeContent() {
                                 </Button>
                             </Link>
 
-                            <Link href="/review/today" className="w-full">
-                                <Button
-                                    variant="outline"
-                                    size="lg"
-                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <BookMarked className="h-5 w-5" />
-                                        <span>今日复习</span>
-                                    </div>
-                                </Button>
-                            </Link>
-
                             <Link href="/stats" className="w-full">
                                 <Button
                                     variant="outline"
@@ -529,6 +516,18 @@ function HomeContent() {
                                     <div className="flex items-center gap-2">
                                         <BarChart3 className="h-5 w-5" />
                                         <span>{t.app?.stats || 'Stats'}</span>
+                                    </div>
+                                </Button>
+                            </Link>
+
+                            <Link href="/review/today" className="w-full col-span-2">
+                                <Button
+                                    size="lg"
+                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all bg-primary/10 hover:bg-primary/20 border-primary/30"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <BookMarked className="h-5 w-5" />
+                                        <span>今日复习</span>
                                     </div>
                                 </Button>
                             </Link>
