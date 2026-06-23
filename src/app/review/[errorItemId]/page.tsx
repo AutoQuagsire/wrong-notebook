@@ -29,10 +29,10 @@ interface ReviewItem {
 }
 
 const ratingOptions = [
-    { value: 1, label: "1 = Again / 不会", variant: "destructive" as const },
-    { value: 2, label: "2 = Hard / 困难", variant: "outline" as const },
-    { value: 3, label: "3 = Good / 正常掌握", variant: "secondary" as const },
-    { value: 4, label: "4 = Easy / 非常熟练", variant: "default" as const },
+    { value: 1, label: "不会", sublabel: "Again", variant: "destructive" as const },
+    { value: 2, label: "困难", sublabel: "Hard", variant: "outline" as const },
+    { value: 3, label: "正常掌握", sublabel: "Good", variant: "secondary" as const },
+    { value: 4, label: "非常熟练", sublabel: "Easy", variant: "default" as const },
 ];
 
 function formatDuration(seconds: number): string {
@@ -307,7 +307,7 @@ export default function ReviewPage() {
 
     return (
         <main className="min-h-screen bg-background">
-            <div className="container mx-auto space-y-6 p-4 pb-16">
+            <div className="container mx-auto space-y-6 p-4 pb-8">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-3">
                         <Button variant="ghost" onClick={() => router.back()}>
@@ -458,16 +458,19 @@ export default function ReviewPage() {
                                 <p className="text-sm text-muted-foreground">
                                     请根据你查看答案后的真实掌握情况自评。系统不会根据文字或照片自动判题。
                                 </p>
-                                <div className="grid gap-3 md:grid-cols-2">
+                                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                                     {ratingOptions.map(option => (
                                         <Button
                                             key={option.value}
                                             variant={option.variant}
-                                            className="h-auto whitespace-normal py-3 text-left"
+                                            className="h-auto whitespace-normal py-2.5 sm:py-3 text-left text-sm sm:text-base"
                                             disabled={isSubmitting || !!savedRecord}
                                             onClick={() => handleSubmitRating(option.value)}
                                         >
-                                            {option.label}
+                                            <span className="flex flex-col">
+                                                <span className="font-medium">{option.label}</span>
+                                                <span className="text-xs opacity-70">{option.sublabel}</span>
+                                            </span>
                                         </Button>
                                     ))}
                                 </div>
