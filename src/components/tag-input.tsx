@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -26,38 +26,51 @@ export function TagInput({ value = [], onChange, placeholder = "Enter tags...", 
     const suggestionsRef = useRef<HTMLDivElement>(null);
 
     // 获取标签建议
-    const fetchSuggestions = useCallback(async (query: string) => {
-        try {
-            const params = new URLSearchParams({ q: query });
-            if (subject) {
-                params.append('subject', subject);
-            }
-            if (gradeStage) {
-                params.append('stage', gradeStage);
-            }
-            const data = await apiClient.get<TagSuggestionsResponse>(`/api/tags/suggestions?${params.toString()}`);
-            const serverSuggestions = data.suggestions || [];
-
-            const filtered = serverSuggestions.filter(
-                (tag) => !value.includes(tag)
-            );
-
-            setSuggestions(filtered.slice(0, 20));
-            setShowSuggestions(filtered.length > 0);
-            setSelectedIndex(0);
-        } catch (error) {
-            console.error("Failed to fetch suggestions:", error);
-        }
-    }, [subject, gradeStage, value]);
-
     useEffect(() => {
-        if (input.trim()) {
-            fetchSuggestions(input);
-        } else {
-            setSuggestions([]);
-            setShowSuggestions(false);
+        let cancelled = false;
+        const query = input.trim();
+
+        if (!query) {
+            queueMicrotask(() => {
+                setSuggestions([]);
+                setShowSuggestions(false);
+            });
+            return;
         }
-    }, [input, fetchSuggestions]);
+
+        async function loadSuggestions() {
+            try {
+                const params = new URLSearchParams({ q: query });
+                if (subject) {
+                    params.append('subject', subject);
+                }
+                if (gradeStage) {
+                    params.append('stage', gradeStage);
+                }
+                const data = await apiClient.get<TagSuggestionsResponse>(`/api/tags/suggestions?${params.toString()}`);
+                if (cancelled) return;
+                const serverSuggestions = data.suggestions || [];
+
+                const filtered = serverSuggestions.filter(
+                    (tag) => !value.includes(tag)
+                );
+
+                if (cancelled) return;
+                setSuggestions(filtered.slice(0, 20));
+                setShowSuggestions(filtered.length > 0);
+                setSelectedIndex(0);
+            } catch (error) {
+                if (cancelled) return;
+                console.error("Failed to fetch suggestions:", error);
+            }
+        }
+
+        void loadSuggestions();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [input, subject, gradeStage, value]);
 
     const addTag = (tag: string) => {
         if (tag.trim() && !value.includes(tag.trim())) {
