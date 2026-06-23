@@ -97,7 +97,6 @@ export async function GET(req: Request) {
         return badRequest(`Invalid practiceType. Must be one of: ${Array.from(VALID_PRACTICE_TYPES).join(", ")}`);
     }
 
-    // @ts-expect-error — session.user.id is injected via JWT callback but not in NextAuth types
     const userId = session.user.id;
 
     try {
@@ -160,7 +159,6 @@ export async function POST(req: Request) {
             revealedAnswer,
         } = await req.json();
 
-        // @ts-expect-error — session.user.id is injected via JWT callback but not in NextAuth types
         const userId = session.user.id;
         const normalizedPracticeType = practiceType || DEFAULT_PRACTICE_TYPE;
         const normalizedAnswerText = normalizeAnswerText(answerText);

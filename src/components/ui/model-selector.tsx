@@ -71,7 +71,8 @@ export function ModelSelector({ provider, apiKey, baseUrl, currentModel, onModel
             }
         } catch (err: unknown) {
             console.error("Failed to fetch models:", err);
-            const errorMsg = err?.message || (t.modelSelector?.fetchFailed || "Failed to fetch models");
+            const errMessage = err instanceof Error ? err.message : String(err);
+            const errorMsg = errMessage || (t.modelSelector?.fetchFailed || "Failed to fetch models");
             setError(errorMsg + (t.modelSelector?.enterManually || ", please enter manually"));
             setUseCustom(true);
         } finally {

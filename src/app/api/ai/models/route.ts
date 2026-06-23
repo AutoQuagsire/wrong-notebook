@@ -58,7 +58,7 @@ async function fetchOpenAIModels(apiKey: string, baseUrl: string): Promise<Model
     const data = await response.json();
 
     return (data.data || [])
-        .map((model: { id: string }) => ({
+        .map((model: { id: string; owned_by?: string }) => ({
             id: model.id,
             name: model.id,
             owned_by: model.owned_by,
@@ -92,7 +92,8 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ models });
 
-    } catch (error: unknown) {
+    } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
         logger.error({ error }, 'Error fetching models');
         return NextResponse.json(
             { error: error.message || 'Internal server error', models: [] },

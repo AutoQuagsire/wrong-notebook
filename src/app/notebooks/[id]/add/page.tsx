@@ -175,7 +175,8 @@ export default function AddErrorPage() {
             frontendLogger.info('[AddAnalyze]', 'Analysis completed successfully', {
                 totalDuration
             });
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { message?: string; data?: string | { message?: string }; status?: number };
             const errorDuration = Date.now() - startTime;
             frontendLogger.error('[AddError]', 'Analysis failed', {
                 errorDuration,
@@ -188,13 +189,13 @@ export default function AddErrorPage() {
                 let errorMessage = t.common.messages?.analysisFailed || 'Analysis failed';
 
                 // ApiError 的结构：error.data.message 包含后端返回的错误类型
-                const backendErrorType = error?.data?.message;
+                const backendErrorType = typeof error.data === 'object' && error.data ? error.data.message : undefined;
 
                 if (backendErrorType && typeof backendErrorType === 'string') {
                     // 检查是否是已知的 AI 错误类型
                     // 使用安全访问
                     if (t.errors && typeof t.errors === 'object' && backendErrorType in t.errors) {
-                        const mappedError = (t.errors as Record<string, string>)[backendErrorType];
+                        const mappedError = (t.errors as Record<string, unknown>)[backendErrorType];
                         if (typeof mappedError === 'string') {
                             errorMessage = mappedError;
                             frontendLogger.info('[AddError]', `Matched error type: ${backendErrorType}`, {
@@ -267,7 +268,7 @@ export default function AddErrorPage() {
                 knowledgePoints: result.knowledgePoints || [],
                 wrongAnswerText: result.wrongAnswerText || "",
                 mistakeAnalysis: result.mistakeAnalysis || "",
-                mistakeStatus: (result.mistakeStatus as string) || "unknown",
+                mistakeStatus: (result.mistakeStatus as "unknown" | "not_attempted" | "wrong_attempt") || "unknown",
                 subject: "数学",
                 requiresImage: false,
             };
@@ -278,7 +279,8 @@ export default function AddErrorPage() {
 
             const totalDuration = Date.now() - startTime;
             frontendLogger.info('[AddTextSubmit]', 'Text analysis completed', { totalDuration });
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { message?: string; data?: string | { message?: string }; status?: number };
             const errorDuration = Date.now() - startTime;
             frontendLogger.error('[AddTextSubmit]', 'Analysis failed', {
                 errorDuration,
@@ -287,10 +289,10 @@ export default function AddErrorPage() {
 
             try {
                 let errorMessage = t.common.messages?.analysisFailed || 'Analysis failed';
-                const backendErrorType = error?.data?.message;
+                const backendErrorType = typeof error.data === 'object' && error.data ? error.data.message : undefined;
                 if (backendErrorType && typeof backendErrorType === 'string') {
                     if (t.errors && typeof t.errors === 'object' && backendErrorType in t.errors) {
-                        const mappedError = (t.errors as Record<string, string>)[backendErrorType];
+                        const mappedError = (t.errors as Record<string, unknown>)[backendErrorType];
                         if (typeof mappedError === 'string') errorMessage = mappedError;
                     } else {
                         errorMessage = backendErrorType;

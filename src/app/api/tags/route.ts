@@ -23,7 +23,7 @@ interface TagTreeNode {
 /**
  * 构建标签树
  */
-function buildTagTree(tags: { id: string; name: string; parentId: string | null; _count?: { errorItems: number } }[]): TagTreeNode[] {
+function buildTagTree(tags: { id: string; name: string; code?: string | null; isSystem: boolean; parentId: string | null; _count?: { errorItems: number } }[]): TagTreeNode[] {
     const tagMap = new Map<string, TagTreeNode>();
     const roots: TagTreeNode[] = [];
 
@@ -32,7 +32,7 @@ function buildTagTree(tags: { id: string; name: string; parentId: string | null;
         tagMap.set(tag.id, {
             id: tag.id,
             name: tag.name,
-            code: tag.code,
+            code: tag.code ?? null,
             isSystem: tag.isSystem,
             children: [],
         });

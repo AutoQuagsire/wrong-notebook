@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+
+type MathCurriculum = Record<string, Array<{ chapter: string; sections: Array<{ section: string; tags: string[] }> }>>;
+type StandardCurriculum = Record<string, Array<{ chapter: string; tags: string[] }>>;
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { internalError, unauthorized, forbidden } from "@/lib/api-errors";
@@ -230,7 +234,7 @@ export async function POST(req: Request) {
     }
 }
 
-async function seedMath(tx: Record<string, unknown>, curriculum: Record<string, string[]>, gradeOrder: Record<string, number>) {
+async function seedMath(tx: Prisma.TransactionClient, curriculum: MathCurriculum, gradeOrder: Record<string, number>) {
     let count = 0;
     for (const [gradeSemester, chapters] of Object.entries(curriculum)) {
         const gradeNode = await tx.knowledgeTag.create({
@@ -289,7 +293,7 @@ async function seedMath(tx: Record<string, unknown>, curriculum: Record<string, 
     return count;
 }
 
-async function seedStandardSubject(tx: Record<string, unknown>, subject: string, curriculum: Record<string, string[]>, gradeOrder: Record<string, number>) {
+async function seedStandardSubject(tx: Prisma.TransactionClient, subject: string, curriculum: StandardCurriculum, gradeOrder: Record<string, number>) {
     let count = 0;
     for (const [gradeSemester, chapters] of Object.entries(curriculum)) {
         const gradeNode = await tx.knowledgeTag.create({

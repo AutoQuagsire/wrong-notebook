@@ -240,8 +240,9 @@ export function SettingsDialog() {
             setShowPassword(false);
             setShowConfirmPassword(false);
             window.location.reload(); // Reload to update user name in UI
-        } catch (error: unknown) {
-            frontendLogger.error('[SettingsDialog]', 'Failed to update profile', { error: error?.data?.message || error?.message || String(error) });
+        } catch (err: unknown) {
+            const error = err as { data?: { message?: string }; message?: string };
+            frontendLogger.error('[SettingsDialog]', 'Failed to update profile', { error: error?.data?.message || error?.message || String(err) });
             const message = error.data?.message || (t.settings?.messages?.updateFailed || "Update failed");
             alert(message);
         } finally {

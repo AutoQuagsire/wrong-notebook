@@ -12,7 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminDashboardData, AdminUserStats } from "@/types/api";
 
-function OverviewCards({ data, t }: { data: AdminDashboardData; t: Record<string, Record<string, string>> }) {
+type TFunc = ReturnType<typeof useLanguage>["t"];
+
+function OverviewCards({ data, t }: { data: AdminDashboardData; t: TFunc }) {
     const cards = [
         {
             title: t.admin?.dashboard?.totalUsers || "总用户数",
@@ -63,7 +65,7 @@ function OverviewCards({ data, t }: { data: AdminDashboardData; t: Record<string
     )
 }
 
-function DailyTrendChart({ data, t }: { data: AdminDashboardData; t: Record<string, Record<string, string>> }) {
+function DailyTrendChart({ data, t }: { data: AdminDashboardData; t: TFunc }) {
     const maxCount = Math.max(...data.dailyTrend.map(d => d.count), 1)
 
     return (
@@ -99,7 +101,7 @@ function DailyTrendChart({ data, t }: { data: AdminDashboardData; t: Record<stri
     )
 }
 
-function SubjectDistributionChart({ data, t }: { data: AdminDashboardData; t: Record<string, Record<string, string>> }) {
+function SubjectDistributionChart({ data, t }: { data: AdminDashboardData; t: TFunc }) {
     const total = data.subjectDistribution.reduce((sum, s) => sum + s.count, 0)
     const colors = [
         "bg-blue-500", "bg-green-500", "bg-orange-500", "bg-purple-500",
@@ -145,7 +147,7 @@ function SubjectDistributionChart({ data, t }: { data: AdminDashboardData; t: Re
     )
 }
 
-function MasteryDistributionCard({ data, t }: { data: AdminDashboardData; t: Record<string, Record<string, string>> }) {
+function MasteryDistributionCard({ data, t }: { data: AdminDashboardData; t: TFunc }) {
     const total = data.masteryDistribution.new + data.masteryDistribution.reviewing + data.masteryDistribution.mastered
     const items = [
         { key: "new", label: t.admin?.dashboard?.masteryNew || "未掌握", count: data.masteryDistribution.new, icon: AlertCircle, color: "text-red-500", bg: "bg-red-500" },

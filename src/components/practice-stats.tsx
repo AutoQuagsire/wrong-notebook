@@ -21,7 +21,7 @@ const CustomTooltip = ({ active, payload, label, t }: {
     active?: boolean;
     payload?: { name: string; value: number; color: string }[];
     label?: string;
-    t: Record<string, Record<string, string>>;
+    t: { stats?: { total?: string } };
 }) => {
     if (active && payload && payload.length) {
         return (

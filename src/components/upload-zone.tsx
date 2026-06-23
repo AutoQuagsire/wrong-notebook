@@ -82,7 +82,7 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
             // 请求屏幕共享权限，优先当前标签页
             const displayMediaOptions: DisplayMediaStreamOptions & {
                 preferCurrentTab?: boolean;
-                controller?: CaptureController | null;
+                controller?: unknown;
             } = {
                 video: true,
                 audio: false,

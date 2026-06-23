@@ -64,7 +64,8 @@ export default function RegisterPage() {
 
             alert(t.auth?.register?.success || 'Registration successful! Please login');
             router.push("/login");
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { data?: { message?: string } };
             let errorMsg = error.data?.message;
             if (errorMsg === 'User with this email already exists') {
                 errorMsg = t.auth?.register?.emailExists || errorMsg;

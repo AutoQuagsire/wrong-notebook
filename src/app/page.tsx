@@ -194,7 +194,8 @@ function HomeContent() {
             frontendLogger.info('[HomeAnalyze]', 'Analysis completed successfully', {
                 totalDuration
             });
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { message?: string; data?: string | { message?: string }; status?: number };
             const errorDuration = Date.now() - startTime;
             frontendLogger.error('[HomeError]', 'Analysis failed', {
                 errorDuration,
@@ -206,12 +207,12 @@ function HomeContent() {
                 let errorMessage = t.common?.messages?.analysisFailed || 'Analysis failed, please try again';
 
                 // ApiError 的结构：error.data.message 包含后端返回的错误类型
-                const backendErrorType = error?.data?.message;
+                const backendErrorType = typeof error.data === 'object' && error.data ? (error.data as Record<string, unknown>).message : undefined;
 
                 if (backendErrorType && typeof backendErrorType === 'string') {
                     // 检查是否是已知的 AI 错误类型
                     if (t.errors && typeof t.errors === 'object' && backendErrorType in t.errors) {
-                        const mappedError = (t.errors as Record<string, string>)[backendErrorType];
+                        const mappedError = (t.errors as Record<string, unknown>)[backendErrorType];
                         if (typeof mappedError === 'string') {
                             errorMessage = mappedError;
                             frontendLogger.info('[HomeError]', `Matched error type: ${backendErrorType}`, {
@@ -283,10 +284,11 @@ function HomeContent() {
             if (finalData.subjectId) {
                 router.push(`/notebooks/${finalData.subjectId}`);
             }
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { message?: string; data?: string | { message?: string }; status?: number };
             frontendLogger.error('[HomeSave]', 'Save failed', {
                 errorStatus: error?.status,
-                errorMessage: error?.data?.message || error?.message || String(error),
+                errorMessage: (typeof error?.data === 'object' ? error.data?.message : undefined) || error?.message || String(error),
                 errorData: error?.data,
             });
             alert(t.common?.messages?.saveFailed || 'Failed to save');
@@ -329,7 +331,7 @@ function HomeContent() {
                 knowledgePoints: result.knowledgePoints || [],
                 wrongAnswerText: result.wrongAnswerText || "",
                 mistakeAnalysis: result.mistakeAnalysis || "",
-                mistakeStatus: (result.mistakeStatus as string) || "unknown",
+                mistakeStatus: (result.mistakeStatus as "unknown" | "not_attempted" | "wrong_attempt") || "unknown",
                 subject: "数学", // Default, will be overridden by notebook selection
                 requiresImage: false,
             };
@@ -340,7 +342,8 @@ function HomeContent() {
 
             const totalDuration = Date.now() - startTime;
             frontendLogger.info('[HomeTextSubmit]', 'Text analysis completed', { totalDuration });
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { message?: string; data?: string | { message?: string }; status?: number };
             const errorDuration = Date.now() - startTime;
             frontendLogger.error('[HomeTextSubmit]', 'Analysis failed', {
                 errorDuration,
@@ -349,10 +352,10 @@ function HomeContent() {
 
             try {
                 let errorMessage = t.common?.messages?.analysisFailed || 'Analysis failed, please try again';
-                const backendErrorType = error?.data?.message;
+                const backendErrorType = typeof error.data === 'object' && error.data ? (error.data as Record<string, unknown>).message : undefined;
                 if (backendErrorType && typeof backendErrorType === 'string') {
                     if (t.errors && typeof t.errors === 'object' && backendErrorType in t.errors) {
-                        const mappedError = (t.errors as Record<string, string>)[backendErrorType];
+                        const mappedError = (t.errors as Record<string, unknown>)[backendErrorType];
                         if (typeof mappedError === 'string') errorMessage = mappedError;
                     } else {
                         errorMessage = backendErrorType;
@@ -412,10 +415,11 @@ function HomeContent() {
             if (data.subjectId) {
                 router.push(`/notebooks/${data.subjectId}`);
             }
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { message?: string; data?: string | { message?: string }; status?: number };
             frontendLogger.error('[HomeDirectSave]', 'Save failed', {
                 errorStatus: error?.status,
-                errorMessage: error?.data?.message || error?.message || String(error),
+                errorMessage: (typeof error?.data === 'object' ? error.data?.message : undefined) || error?.message || String(error),
             });
             setAnalysisStep('idle');
             alert(t.common?.messages?.saveFailed || 'Failed to save');

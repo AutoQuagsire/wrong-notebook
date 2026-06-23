@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Maximize2, Minimize2, RotateCcw, RefreshCw } from "lucide-react";
 
+type GGBApi = Record<string, unknown>;
+
 interface GeogebraDemoProps {
     commands: string;
     height?: number;
@@ -21,7 +23,7 @@ let ggbScriptPromise: Promise<void> | null = null;
 function loadGeoGebraScript(): Promise<void> {
     if (ggbScriptPromise) return ggbScriptPromise;
     ggbScriptPromise = new Promise<void>((resolve, reject) => {
-        if (typeof window !== "undefined" && (window as Record<string, unknown>).GGBApplet) {
+        if (typeof window !== "undefined" && (window as unknown as { GGBApplet?: unknown }).GGBApplet) {
             resolve();
             return;
         }
@@ -99,12 +101,12 @@ function parseApiArgs(cmd: string): { m: string; a: unknown[] } | null {
     catch { return null; }
 }
 
-function runCommands(api: Record<string, unknown>, cmds: string[]) {
+function runCommands(api: { evalCommand: (cmd: string) => void; [key: string]: unknown }, cmds: string[]) {
     for (const cmd of cmds) {
         try {
             if (isApiCall(cmd)) {
                 const p = parseApiArgs(cmd);
-                if (p && typeof api[p.m] === 'function') api[p.m](...p.a);
+                if (p && typeof api[p.m] === 'function') (api[p.m] as (...args: unknown[]) => void)(...p.a);
             } else {
                 // Basic command validation: only allow safe characters
                 const sanitized = cmd.trim();
@@ -134,7 +136,7 @@ export function GeogebraDemo({
     // All GeoGebra DOM is injected via innerHTML in the effect, so
     // React's reconciler never touches the inside of this node.
     const ggbHostRef = useRef<HTMLDivElement>(null);
-    const apiRef = useRef<Record<string, unknown> | null>(null);
+    const apiRef = useRef<{ evalCommand: (cmd: string) => void; [key: string]: unknown } | null>(null);
     const idRef = useRef(`ggb-${Math.random().toString(36).slice(2, 9)}`);
 
     const [loading, setLoading] = useState(true);
@@ -153,9 +155,7 @@ export function GeogebraDemo({
 
         loadGeoGebraScript().then(() => {
             if (dead) return;
-            const GGBApplet = (window as Record<string, unknown>).GGBApplet as
-                | { new (config: Record<string, unknown>, ggbVersion: boolean): { inject: (id: string) => void } }
-                | undefined;
+            const GGBApplet = (window as unknown as { GGBApplet?: { new (config: Record<string, unknown>, ggbVersion: boolean): { inject: (id: string) => void } } }).GGBApplet;
             if (!GGBApplet) { setError("GeoGebra 未正确加载"); setLoading(false); return; }
 
             const el = ggbHostRef.current;
@@ -176,7 +176,7 @@ export function GeogebraDemo({
                     enableRightClick: true,
                     enableShiftDragZoom: true,
                     language: "zh",
-                    appletOnLoad: (api: Record<string, unknown>) => {
+                    appletOnLoad: (api: { evalCommand: (cmd: string) => void; [key: string]: unknown }) => {
                         if (dead) return;
                         apiRef.current = api;
                         runCommands(api, cmds);
@@ -221,7 +221,7 @@ export function GeogebraDemo({
         const h = expanded ? 700 : height;
         ggbDiv.style.height = `${h}px`;
         const api = apiRef.current;
-        if (api?.setSize) api.setSize(ggbDiv.offsetWidth, h);
+        if (api) (api.setSize as (w: number, h: number) => void)?.(ggbDiv.offsetWidth, h);
     }, [expanded, height]);
 
     // ── Reset ───────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ export function GeogebraDemo({
         const api = apiRef.current;
         if (!api) return;
         try {
-            api.resetConstruction();
+            (api.resetConstruction as () => void)();
             setTimeout(() => { if (apiRef.current) runCommands(apiRef.current, cmds); }, 300);
         } catch (e) { console.warn("[GGB] Reset failed", e); }
     }, [cmds]);

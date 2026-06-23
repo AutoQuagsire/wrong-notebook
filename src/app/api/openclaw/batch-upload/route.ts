@@ -89,6 +89,8 @@ async function callOpenclawAgent(imageBase64: string, mimeType: string, timeout:
     } catch (error: unknown) {
         clearTimeout(timeoutId);
 
+        const errMsg = error instanceof Error ? error.message : String(error);
+
         if (error instanceof Error && error.name === 'AbortError') {
             logger.error('Openclaw agent timeout');
             return {
@@ -97,10 +99,10 @@ async function callOpenclawAgent(imageBase64: string, mimeType: string, timeout:
             };
         }
         
-        logger.error({ error: error?.message || String(error) }, 'Openclaw agent request failed');
+        logger.error({ error: errMsg }, 'Openclaw agent request failed');
         return {
             success: false,
-            error: `识别服务请求失败: ${error?.message || String(error)}`,
+            error: `识别服务请求失败: ${errMsg}`,
         };
     }
 }
@@ -379,11 +381,12 @@ export async function POST(req: Request) {
 
                 logger.info({ index: i, errorItemId: errorItem.id }, 'Error item created successfully');
             } catch (dbError: unknown) {
-                logger.error({ index: i, error: dbError?.message || String(dbError) }, 'Failed to create error item');
+                const errMsg = dbError instanceof Error ? dbError.message : String(dbError);
+                logger.error({ index: i, error: errMsg }, 'Failed to create error item');
                 results.push({
                     success: false,
                     index: i,
-                    error: `数据库写入失败: ${dbError?.message || String(dbError)}`,
+                    error: `数据库写入失败: ${errMsg}`,
                 });
             }
         }
@@ -407,12 +410,14 @@ export async function POST(req: Request) {
             results,
         }, { status: statusCode });
     } catch (error: unknown) {
-        logger.error({ error: error?.message || String(error), stack: error?.stack }, 'Batch upload error');
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const errStack = error instanceof Error ? error.stack : undefined;
+        logger.error({ error: errMsg, stack: errStack }, 'Batch upload error');
         return createErrorResponse(
-            error?.message || '批量上传失败',
+            errMsg || '批量上传失败',
             500,
             ErrorCode.INTERNAL_ERROR,
-            error?.message || String(error)
+            errMsg
         );
     }
 }

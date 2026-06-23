@@ -155,7 +155,8 @@ export default function TagsPage() {
             await fetchCustomTags();
             await fetchTags(newTagSubject);
             alert(t.tags?.custom?.success || "Tag added successfully!");
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { message?: string };
             if (error?.message?.includes('409')) {
                 alert(t.tags?.custom?.exists || "Tag already exists");
             } else {

@@ -28,7 +28,6 @@ export async function GET(req: Request) {
         limit = Math.min(parsed, MAX_LIMIT);
     }
 
-    // @ts-expect-error — session.user.id is injected via JWT callback
     const userId = session.user.id;
 
     try {

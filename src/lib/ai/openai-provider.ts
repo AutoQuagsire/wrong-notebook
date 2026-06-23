@@ -57,7 +57,7 @@ export class OpenAIProvider implements AIService {
             }
             if (Array.isArray(msg.content)) {
                 const adapted = msg.content.map((part: { type: string; image_url?: { url: string } }) => {
-                    if (part.type === 'image_url') {
+                    if (part.type === 'image_url' && part.image_url) {
                         return {
                             type: 'input_image',
                             input_image: { data: [part.image_url.url], type: 'url' }
@@ -218,7 +218,7 @@ export class OpenAIProvider implements AIService {
 
             logger.box('📤 API Request (发送给 AI 的原始请求)', JSON.stringify(requestParamsForLog, null, 2));
 
-            let response: Record<string, unknown>;
+            let response: { choices?: { message?: { content?: string | null } }[] };
 
             if (this.isLongCat) {
                 // LongCat 使用不同的多模态格式，绕过 SDK 直接请求

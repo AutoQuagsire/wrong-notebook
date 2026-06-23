@@ -88,8 +88,9 @@ export function UserManagement() {
         try {
             await apiClient.delete(`/api/admin/users/${user.id}`);
             fetchUsers();
-        } catch (error: unknown) {
-            console.error("Failed to delete user", error);
+        } catch (err: unknown) {
+            const error = err as { data?: { message?: string }; message?: string };
+            console.error("Failed to delete user", err);
             const text = error.data?.message || t.common.error;
             alert(text);
         }

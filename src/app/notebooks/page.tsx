@@ -44,7 +44,8 @@ export default function NotebooksPage() {
         try {
             await apiClient.post("/api/notebooks", { name });
             await fetchNotebooks();
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { data?: { message?: string }; message?: string };
             console.error(error);
             const message = error.data?.message || t.notebooks?.createError || "Failed to create";
             alert(message);
@@ -68,7 +69,8 @@ export default function NotebooksPage() {
         try {
             await apiClient.delete(`/api/notebooks/${id}`);
             await fetchNotebooks();
-        } catch (error: unknown) {
+        } catch (err: unknown) {
+            const error = err as { data?: { message?: string }; message?: string };
             console.error(error);
             const message = error.data?.message || t.notebooks?.deleteError || "Failed to delete";
             alert(message);
