@@ -163,6 +163,7 @@ export default function ReviewTodayPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [includeNew, setIncludeNew] = useState(false);
+    const [showTodayPlanItems, setShowTodayPlanItems] = useState(false);
     const [showOverdueItems, setShowOverdueItems] = useState(false);
 
     const fetchData = async (withNew: boolean) => {
@@ -418,18 +419,48 @@ export default function ReviewTodayPage() {
                     </Card>
                 )}
 
-                {/* Today plan list */}
+                {/* Today plan entry */}
                 <section className="space-y-3">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-semibold">今日计划</h2>
                         <span className="text-sm text-muted-foreground">{todayPlanItems.length} 条</span>
                     </div>
                     {hasTodayPlan ? (
-                        <div className="space-y-3">
-                            {todayPlanItems.map((item) => (
-                                <DueItemCard key={item.errorItemId} item={item} />
-                            ))}
-                        </div>
+                        <>
+                            <Card
+                                className="cursor-pointer transition hover:border-primary/40 hover:bg-primary/5"
+                                onClick={() => setShowTodayPlanItems((prev) => !prev)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault();
+                                        setShowTodayPlanItems((prev) => !prev);
+                                    }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                            >
+                                <CardContent className="flex items-center justify-between gap-3 p-4">
+                                    <div className="min-w-0">
+                                        <p className="font-medium">查看今日计划（{todayPlanItems.length}）</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            点击后查看今天计划复习的具体题目
+                                        </p>
+                                    </div>
+                                    {showTodayPlanItems ? (
+                                        <ChevronUp className="h-5 w-5 shrink-0 text-muted-foreground" />
+                                    ) : (
+                                        <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
+                                    )}
+                                </CardContent>
+                            </Card>
+                            {showTodayPlanItems && (
+                                <div className="space-y-3">
+                                    {todayPlanItems.map((item) => (
+                                        <DueItemCard key={item.errorItemId} item={item} />
+                                    ))}
+                                </div>
+                            )}
+                        </>
                     ) : (
                         <Card className="border-dashed">
                             <CardContent className="py-6 text-center text-sm text-muted-foreground">
