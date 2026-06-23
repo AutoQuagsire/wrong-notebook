@@ -466,7 +466,7 @@ function HomeContent() {
                 </div>
 
                 {/* Action Center */}
-                <div className={initialNotebookId ? "flex justify-center mb-6" : "grid grid-cols-2 md:grid-cols-4 gap-4"}>
+                <div className={initialNotebookId ? "flex justify-center mb-6" : "grid grid-cols-2 md:grid-cols-5 gap-4"}>
                     <Button
                         size="lg"
                         className={`h-auto py-4 text-base shadow-sm hover:shadow-md transition-all ${initialNotebookId ? "w-full max-w-md" : ""}`}
@@ -520,10 +520,11 @@ function HomeContent() {
                                 </Button>
                             </Link>
 
-                            <Link href="/review/today" className="w-full col-span-2">
+                            <Link href="/review/today" className="w-full col-span-2 md:col-span-1">
                                 <Button
+                                    variant="default"
                                     size="lg"
-                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all bg-primary/10 hover:bg-primary/20 border-primary/30"
+                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all"
                                 >
                                     <div className="flex items-center gap-2">
                                         <BookMarked className="h-5 w-5" />
