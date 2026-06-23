@@ -21,7 +21,9 @@ export function ProgressFeedback({ status, progress, message, className }: Progr
     // 确保只在客户端挂载完成后才渲染遮罩层，防止 SSR/Hydration 问题
     const [isMounted, setIsMounted] = useState(false);
 
+    // one-time client mount guard to prevent SSR/hydration mismatch for overlay
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsMounted(true);
     }, []);
 

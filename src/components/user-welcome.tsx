@@ -12,7 +12,9 @@ export function UserWelcome() {
     const { data: session } = useSession();
     const [mounted, setMounted] = useState(false);
 
+    // one-time client mount guard to show real user name after hydration
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true);
     }, []);
 

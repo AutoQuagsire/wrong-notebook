@@ -29,6 +29,22 @@ function VariableInfo({ name, description }: VariableInfoProps) {
     );
 }
 
+function WarningBox({ t }: { t: { settings?: { prompts?: { caution?: string; warning?: string } } } }) {
+    return (
+        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 flex items-start gap-3 text-amber-900 text-sm mb-4">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
+            <div className="space-y-1">
+                <p className="font-medium">
+                    {t.settings?.prompts?.caution || "Modify with Caution"}
+                </p>
+                <p className="text-amber-800/90 text-xs">
+                    {t.settings?.prompts?.warning || "Variables in {{brackets}} are used to inject dynamic content. Please preserve these variables, otherwise the AI providing may fail to get question context or return invalid formats."}
+                </p>
+            </div>
+        </div>
+    );
+}
+
 export function PromptSettings({ config, onUpdate }: PromptSettingsProps) {
     const { language, t } = useLanguage();
     const [analyzeTemplate, setAnalyzeTemplate] = useState("");
@@ -62,20 +78,6 @@ export function PromptSettings({ config, onUpdate }: PromptSettingsProps) {
         }
     };
 
-    const WarningBox = () => (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 flex items-start gap-3 text-amber-900 text-sm mb-4">
-            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
-            <div className="space-y-1">
-                <p className="font-medium">
-                    {t.settings?.prompts?.caution || "Modify with Caution"}
-                </p>
-                <p className="text-amber-800/90 text-xs">
-                    {t.settings?.prompts?.warning || "Variables in {{brackets}} are used to inject dynamic content. Please preserve these variables, otherwise the AI providing may fail to get question context or return invalid formats."}
-                </p>
-            </div>
-        </div>
-    );
-
     return (
         <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
             <Tabs defaultValue="analyze" className="w-full">
@@ -100,7 +102,7 @@ export function PromptSettings({ config, onUpdate }: PromptSettingsProps) {
                             </Button>
                         </div>
 
-                        <WarningBox />
+                        <WarningBox t={t} />
 
                         <div className="space-y-2 border rounded-md p-3 bg-background">
                             <h4 className="text-xs font-medium flex items-center gap-1.5 mb-2">
@@ -144,7 +146,7 @@ export function PromptSettings({ config, onUpdate }: PromptSettingsProps) {
                             </Button>
                         </div>
 
-                        <WarningBox />
+                        <WarningBox t={t} />
 
                         <div className="space-y-2 border rounded-md p-3 bg-background">
                             <h4 className="text-xs font-medium flex items-center gap-1.5 mb-2">
