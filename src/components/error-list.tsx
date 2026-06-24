@@ -22,7 +22,6 @@ import {
 import { KnowledgeFilter } from "@/components/knowledge-filter";
 import { ErrorItem, PaginatedResponse } from "@/types/api";
 import { apiClient } from "@/lib/api-client";
-import { cleanMarkdown } from "@/lib/markdown-utils";
 import { Pagination } from "@/components/ui/pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants/pagination";
 import { getMistakeStatusLabel } from "@/lib/mistake-status";
@@ -37,44 +36,6 @@ type KnowledgeFilterChange = {
     chapter?: string;
     tag?: string | null;
 };
-
-function cleanErrorCardPreview(text: string): string {
-    if (!text) return "";
-
-    // Pre-process: normalize common LaTeX before cleanMarkdown removes backslashes
-    const pre = text
-        .replace(/\${1,2}/g, "")
-        .replace(/\\mathrm\s*\{([^{}]+)\}/g, "$1")
-        .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "($1)/($2)")
-        .replace(/\\sqrt\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, "√($1)")
-        .replace(/\\int\b/g, "∫")
-        .replace(/\\sum\b/g, "Σ")
-        .replace(/\\alpha\b/g, "α")
-        .replace(/\\beta\b/g, "β")
-        .replace(/\\sin\b/g, "sin")
-        .replace(/\\cos\b/g, "cos")
-        .replace(/\\tan\b/g, "tan")
-        .replace(/\\ln\b/g, "ln")
-        .replace(/\\lim\b/g, "lim")
-        .replace(/\\infty\b/g, "∞");
-
-    const md = cleanMarkdown(pre);
-
-    return md
-        .replace(/\bfrac(?:\s*\{[^{}]*}\s*\{[^{}]*})?\b/gi, " ")
-        .replace(/\bsqrt(?:\s*\{[^{}]*})?\b/gi, "√")
-        .replace(/\bmathrm(?:\s*\{[^{}]*})?\b/gi, " ")
-        .replace(/\bint_\b/gi, "∫")
-        .replace(/\bint\b/gi, "∫")
-        .replace(/\bsum\b/gi, "Σ")
-        .replace(/\balpha\b/gi, "α")
-        .replace(/\bbeta\b/gi, "β")
-        .replace(/\bbackslash\b/gi, "")
-        .replace(/[{}]/g, " ")
-        .replace(/[_^]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-}
 
 export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
     const [items, setItems] = useState<ErrorItem[]>([]);
@@ -430,17 +391,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                                         </div>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="text-sm line-clamp-3">
-                                            {(() => {
-                                                const rawText = (item.questionText || "").split('\n\n')[0];
-                                                const cleanText = cleanErrorCardPreview(rawText);
-
-                                                return cleanText.length > 80
-                                                    ? cleanText.substring(0, 80) + "..."
-                                                    : cleanText;
-                                            })()}
-                                        </div>
-                                        <div className="flex flex-wrap gap-2 mt-3">
+                                        <div className="flex flex-wrap gap-2">
                                             <Badge variant={item.mistakeStatus === "wrong_attempt" ? "default" : "secondary"} className="text-xs">
                                                 {getMistakeStatusLabel(item.mistakeStatus, language)}
                                             </Badge>
