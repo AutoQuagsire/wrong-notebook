@@ -396,7 +396,19 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                                             {(() => {
                                                 // 提取文本并清理 LaTeX/Markdown 格式
                                                 const rawText = (item.questionText || "").split('\n\n')[0]; // 取第一段
-                                                const cleanText = cleanMarkdown(rawText);
+                                                const cleanText = cleanMarkdown(rawText)
+                                                    // Remark strips \ but leaves bare LaTeX commands; reprocess
+                                                    .replace(/frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '($1)/($2)')
+                                                    .replace(/sqrt\s*\{([^{}]+)\}/g, '√($1)')
+                                                    .replace(/mathrm\s*\{([^{}]+)\}/g, '$1')
+                                                    .replace(/\\sin/g, 'sin')
+                                                    .replace(/\\cos/g, 'cos')
+                                                    .replace(/\\tan/g, 'tan')
+                                                    .replace(/\\lim/g, 'lim')
+                                                    .replace(/\\int/g, '∫')
+                                                    .replace(/\\sum/g, 'Σ')
+                                                    .replace(/[{}]/g, '')
+                                                    .replace(/\\\\/g, '');
 
                                                 return cleanText.length > 80
                                                     ? cleanText.substring(0, 80) + "..."
