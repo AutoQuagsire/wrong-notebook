@@ -62,7 +62,9 @@ function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 function getRatingLabel(rating?: number | null): string {
-    return ratingOptions.find(option => option.value === rating)?.label || "未评分";
+    const option = ratingOptions.find(option => option.value === rating);
+    if (!option) return "未评分";
+    return `${option.label} · ${option.sublabel}`;
 }
 
 function formatReviewDate(value?: string | null): string {
@@ -546,7 +548,7 @@ export default function ReviewPage() {
                                                         独立作答耗时：{formatDuration(record.durationSeconds || 0)}
                                                     </div>
                                                     {record.answerText ? (
-                                                        <div className="mt-4 space-y-2">
+                                                        <div className="mt-4 space-y-2 max-h-40 overflow-auto">
                                                             <p className="text-sm font-medium text-muted-foreground">本次文字记录</p>
                                                             <MarkdownRenderer content={record.answerText} />
                                                         </div>
@@ -557,7 +559,7 @@ export default function ReviewPage() {
                                                             <img
                                                                 src={record.answerImageUrl}
                                                                 alt="历史作答照片"
-                                                                className="max-h-72 w-full rounded-lg border object-contain"
+                                                                className="max-h-48 sm:max-h-64 md:max-h-72 w-full rounded-lg border object-contain"
                                                             />
                                                         </div>
                                                     ) : null}
