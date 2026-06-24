@@ -105,11 +105,6 @@ export default function ReviewPage() {
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [savedRecord, setSavedRecord] = useState<PracticeRecordData | null>(null);
 
-    const [historyVisible, setHistoryVisible] = useState(false);
-    const [historyLoading, setHistoryLoading] = useState(false);
-    const [historyError, setHistoryError] = useState<string | null>(null);
-    const [historyRecords, setHistoryRecords] = useState<PracticeRecordData[]>([]);
-
     const displayQuestion = useMemo(() => {
         if (!item) {
             return "";
@@ -125,9 +120,6 @@ export default function ReviewPage() {
         setAnswerVisible(false);
         setSavedRecord(null);
         setSubmitError(null);
-        setHistoryVisible(false);
-        setHistoryRecords([]);
-        setHistoryError(null);
 
         if (!errorItemId) {
             setLoadError("缺少错题 ID");
@@ -174,35 +166,6 @@ export default function ReviewPage() {
             window.clearInterval(timer);
         };
     }, [answerVisible, item]);
-
-    const loadHistory = async () => {
-        if (!errorItemId) {
-            return;
-        }
-
-        setHistoryLoading(true);
-        setHistoryError(null);
-
-        try {
-            const records = await apiClient.get<PracticeRecordData[]>("/api/practice/record", {
-                params: { errorItemId, practiceType: "ORIGINAL_REVIEW" },
-            });
-            setHistoryRecords(records);
-        } catch (error) {
-            setHistoryError(getErrorMessage(error, "加载历史作答失败"));
-        } finally {
-            setHistoryLoading(false);
-        }
-    };
-
-    const toggleHistory = async () => {
-        const nextVisible = !historyVisible;
-        setHistoryVisible(nextVisible);
-
-        if (nextVisible) {
-            await loadHistory();
-        }
-    };
 
     const handleRevealAnswer = () => {
         if (answerVisible) {
@@ -262,10 +225,6 @@ export default function ReviewPage() {
             });
 
             setSavedRecord(record);
-
-            if (historyVisible) {
-                await loadHistory();
-            }
         } catch (error) {
             setSubmitError(getErrorMessage(error, "保存复习记录失败"));
         } finally {
@@ -508,66 +467,22 @@ export default function ReviewPage() {
                             </CardContent>
                         </Card>
 
-                        <Card>
+                        <Card className="border-dashed border-muted-foreground/25">
                             <CardHeader>
-                                <CardTitle>历史作答</CardTitle>
+                                <CardTitle className="flex items-center gap-2 text-base font-medium">
+                                    <History className="h-5 w-5 text-muted-foreground" />
+                                    历史作答
+                                </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-4">
+                            <CardContent className="space-y-3">
                                 <p className="text-sm text-muted-foreground">
-                                    默认隐藏历史作答。需要时再展开查看，便于追溯到对应的复习记录和手写照片。
+                                    查看该题过往复习记录和手写作答照片。
                                 </p>
-                                <Button variant="outline" onClick={toggleHistory}>
-                                    <History className="mr-2 h-4 w-4" />
-                                    {historyVisible ? "收起历史作答" : "查看历史作答"}
-                                </Button>
-
-                                {historyVisible ? (
-                                    <>
-                                        {historyLoading ? (
-                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                <span>正在加载历史作答...</span>
-                                            </div>
-                                        ) : null}
-                                        {historyError ? (
-                                            <p className="text-sm text-red-600">{historyError}</p>
-                                        ) : null}
-                                        {!historyLoading && !historyError && historyRecords.length === 0 ? (
-                                            <p className="text-sm text-muted-foreground">暂无历史作答记录。</p>
-                                        ) : null}
-                                        <div className="space-y-4">
-                                            {historyRecords.map(record => (
-                                                <div key={record.id} className="rounded-lg border p-4">
-                                                    <div className="flex flex-col gap-2 text-sm md:flex-row md:items-center md:justify-between">
-                                                        <span className="font-medium">{getRatingLabel(record.rating)}</span>
-                                                        <span className="text-muted-foreground">
-                                                            {new Date(record.createdAt).toLocaleString("zh-CN")}
-                                                        </span>
-                                                    </div>
-                                                    <div className="mt-2 text-sm text-muted-foreground">
-                                                        独立作答耗时：{formatDuration(record.durationSeconds || 0)}
-                                                    </div>
-                                                    {record.answerText ? (
-                                                        <div className="mt-4 space-y-2 max-h-40 overflow-auto">
-                                                            <p className="text-sm font-medium text-muted-foreground">本次文字记录</p>
-                                                            <MarkdownRenderer content={record.answerText} />
-                                                        </div>
-                                                    ) : null}
-                                                    {record.answerImageUrl ? (
-                                                        <div className="mt-4 space-y-2">
-                                                            <p className="text-sm font-medium text-muted-foreground">本次手写作答照片</p>
-                                                            <img
-                                                                src={record.answerImageUrl}
-                                                                alt="历史作答照片"
-                                                                className="max-h-48 sm:max-h-64 md:max-h-72 w-full rounded-lg border object-contain"
-                                                            />
-                                                        </div>
-                                                    ) : null}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </>
-                                ) : null}
+                                <Link href={`/review/${errorItemId}/history`}>
+                                    <Button variant="outline" size="sm">
+                                        查看历史作答
+                                    </Button>
+                                </Link>
                             </CardContent>
                         </Card>
                     </>
