@@ -38,6 +38,44 @@ type KnowledgeFilterChange = {
     tag?: string | null;
 };
 
+function cleanErrorCardPreview(text: string): string {
+    if (!text) return "";
+
+    // Pre-process: normalize common LaTeX before cleanMarkdown removes backslashes
+    const pre = text
+        .replace(/\${1,2}/g, "")
+        .replace(/\\mathrm\s*\{([^{}]+)\}/g, "$1")
+        .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "($1)/($2)")
+        .replace(/\\sqrt\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g, "√($1)")
+        .replace(/\\int\b/g, "∫")
+        .replace(/\\sum\b/g, "Σ")
+        .replace(/\\alpha\b/g, "α")
+        .replace(/\\beta\b/g, "β")
+        .replace(/\\sin\b/g, "sin")
+        .replace(/\\cos\b/g, "cos")
+        .replace(/\\tan\b/g, "tan")
+        .replace(/\\ln\b/g, "ln")
+        .replace(/\\lim\b/g, "lim")
+        .replace(/\\infty\b/g, "∞");
+
+    const md = cleanMarkdown(pre);
+
+    return md
+        .replace(/\bfrac(?:\s*\{[^{}]*}\s*\{[^{}]*})?\b/gi, " ")
+        .replace(/\bsqrt(?:\s*\{[^{}]*})?\b/gi, "√")
+        .replace(/\bmathrm(?:\s*\{[^{}]*})?\b/gi, " ")
+        .replace(/\bint_\b/gi, "∫")
+        .replace(/\bint\b/gi, "∫")
+        .replace(/\bsum\b/gi, "Σ")
+        .replace(/\balpha\b/gi, "α")
+        .replace(/\bbeta\b/gi, "β")
+        .replace(/\bbackslash\b/gi, "")
+        .replace(/[{}]/g, " ")
+        .replace(/[_^]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
     const [items, setItems] = useState<ErrorItem[]>([]);
     const [, setLoading] = useState(true);
@@ -394,21 +432,8 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                                     <CardContent>
                                         <div className="text-sm line-clamp-3">
                                             {(() => {
-                                                // 提取文本并清理 LaTeX/Markdown 格式
-                                                const rawText = (item.questionText || "").split('\n\n')[0]; // 取第一段
-                                                const cleanText = cleanMarkdown(rawText)
-                                                    // Remark strips \ but leaves bare LaTeX commands; reprocess
-                                                    .replace(/frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '($1)/($2)')
-                                                    .replace(/sqrt\s*\{([^{}]+)\}/g, '√($1)')
-                                                    .replace(/mathrm\s*\{([^{}]+)\}/g, '$1')
-                                                    .replace(/\\sin/g, 'sin')
-                                                    .replace(/\\cos/g, 'cos')
-                                                    .replace(/\\tan/g, 'tan')
-                                                    .replace(/\\lim/g, 'lim')
-                                                    .replace(/\\int/g, '∫')
-                                                    .replace(/\\sum/g, 'Σ')
-                                                    .replace(/[{}]/g, '')
-                                                    .replace(/\\\\/g, '');
+                                                const rawText = (item.questionText || "").split('\n\n')[0];
+                                                const cleanText = cleanErrorCardPreview(rawText);
 
                                                 return cleanText.length > 80
                                                     ? cleanText.substring(0, 80) + "..."
