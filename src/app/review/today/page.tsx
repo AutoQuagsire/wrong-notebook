@@ -73,10 +73,10 @@ export default function ReviewTodayPage() {
     if (error) {
         return (
             <main className="min-h-screen bg-background">
-                <div className="container mx-auto space-y-6 px-4 py-8">
-                    <div className="flex items-center gap-4">
+                <div className="container mx-auto space-y-4 md:space-y-6 px-3 md:px-4 py-6 md:py-8">
+                    <div className="flex items-center gap-3 md:gap-4">
                         <BackButton fallbackUrl="/" />
-                        <h1 className="text-2xl font-bold">今日复习</h1>
+                        <h1 className="text-xl md:text-2xl font-bold">今日复习</h1>
                     </div>
                     <Card className="border-red-200">
                         <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
@@ -102,14 +102,14 @@ export default function ReviewTodayPage() {
 
     return (
         <main className="min-h-screen bg-background">
-            <div className="container mx-auto space-y-6 px-4 py-8 pb-20">
+            <div className="container mx-auto space-y-4 md:space-y-6 px-3 md:px-4 py-6 md:py-8 pb-20">
                 {/* Header */}
-                <div className="flex flex-wrap items-start justify-between gap-3 sm:flex-nowrap sm:items-center">
-                    <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
+                <div className="flex flex-wrap items-start justify-between gap-2 sm:flex-nowrap sm:items-center">
+                    <div className="flex min-w-0 items-start gap-2 sm:items-center sm:gap-4">
                         <BackButton fallbackUrl="/" />
                         <div className="min-w-0">
-                            <h1 className="flex min-w-0 items-center gap-2 text-2xl font-bold">
-                                <BookOpen className="h-6 w-6 shrink-0" />
+                            <h1 className="flex min-w-0 items-center gap-1.5 sm:gap-2 text-xl md:text-2xl font-bold">
+                                <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 shrink-0" />
                                 今日复习
                             </h1>
                             <p className="mt-1 break-words text-sm text-muted-foreground">
@@ -131,20 +131,20 @@ export default function ReviewTodayPage() {
 
                 {/* Stats Cards */}
                 {stats && (
-                    <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-4">
                         <Link
                             href="/review/today/plan"
                             className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
                             <Card className="cursor-pointer transition hover:border-primary/40 hover:bg-primary/5">
-                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-2.5 pb-1 pt-2.5 sm:px-6 sm:pb-2 sm:pt-6">
                                     <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
                                         今日计划
                                     </CardTitle>
-                                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600 sm:h-4 sm:w-4" />
+                                    <CheckCircle2 className="h-3 w-3 shrink-0 text-green-600 sm:h-4 sm:w-4" />
                                 </CardHeader>
-                                <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
-                                    <div className="text-2xl font-bold leading-none sm:text-3xl">{todayPlanItems.length}</div>
+                                <CardContent className="px-2.5 pb-2.5 pt-0 sm:px-6 sm:pb-6">
+                                    <div className="text-xl font-bold leading-none sm:text-3xl">{todayPlanItems.length}</div>
                                 </CardContent>
                             </Card>
                         </Link>
@@ -153,14 +153,14 @@ export default function ReviewTodayPage() {
                             className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
                             <Card className="cursor-pointer transition hover:border-red-300 hover:bg-red-50/40">
-                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-2.5 pb-1 pt-2.5 sm:px-6 sm:pb-2 sm:pt-6">
                                     <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
                                         已逾期
                                     </CardTitle>
-                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500 sm:h-4 sm:w-4" />
+                                    <AlertTriangle className="h-3 w-3 shrink-0 text-red-500 sm:h-4 sm:w-4" />
                                 </CardHeader>
-                                <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
-                                    <div className={`text-2xl font-bold leading-none sm:text-3xl ${overdueItems.length > 0 ? "text-red-600" : ""}`}>
+                                <CardContent className="px-2.5 pb-2.5 pt-0 sm:px-6 sm:pb-6">
+                                    <div className={`text-xl font-bold leading-none sm:text-3xl ${overdueItems.length > 0 ? "text-red-600" : ""}`}>
                                         {overdueItems.length}
                                     </div>
                                 </CardContent>
@@ -171,14 +171,14 @@ export default function ReviewTodayPage() {
                             className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
                             <Card className="cursor-pointer transition hover:border-primary/40 hover:bg-primary/5">
-                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-3 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+                                <CardHeader className="flex flex-row items-start justify-between space-y-0 px-2.5 pb-1 pt-2.5 sm:px-6 sm:pb-2 sm:pt-6">
                                     <CardTitle className="min-w-0 text-xs font-medium leading-4 text-muted-foreground sm:text-sm">
-                                        新错题候选
+                                        新题候选
                                     </CardTitle>
-                                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-blue-500 sm:h-4 sm:w-4" />
+                                    <Sparkles className="h-3 w-3 shrink-0 text-blue-500 sm:h-4 sm:w-4" />
                                 </CardHeader>
-                                <CardContent className="px-3 pb-3 pt-0 sm:px-6 sm:pb-6">
-                                    <div className="text-2xl font-bold leading-none sm:text-3xl">{stats.newCount}</div>
+                                <CardContent className="px-2.5 pb-2.5 pt-0 sm:px-6 sm:pb-6">
+                                    <div className="text-xl font-bold leading-none sm:text-3xl">{stats.newCount}</div>
                                 </CardContent>
                             </Card>
                         </Link>
@@ -221,13 +221,13 @@ export default function ReviewTodayPage() {
                 {/* Primary action */}
                 {hasDue && firstReviewItem && (
                     <Card className="border-primary/40 bg-primary/5">
-                        <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
-                            <div className="min-w-0 space-y-1">
-                                <p className="font-medium">开始今日复习</p>
-                                    <p className="text-sm text-muted-foreground">点击开始进入今日复习流程</p>
+                        <CardContent className="flex flex-col gap-3 sm:gap-4 p-3 sm:p-5">
+                            <div className="min-w-0 space-y-0.5">
+                                <p className="font-medium text-sm sm:text-base">开始今日复习</p>
+                                    <p className="text-xs sm:text-sm text-muted-foreground">点击开始进入今日复习流程</p>
                             </div>
                             <Link href={`/review/${firstReviewItem.errorItemId}?from=today`} className="w-full">
-                                <Button size="lg" className="h-14 w-full text-base font-semibold">
+                                <Button size="lg" className="h-12 sm:h-14 w-full text-sm sm:text-base font-semibold">
                                     <PlayCircle className="mr-2 h-5 w-5" />
                                     开始复习
                                 </Button>

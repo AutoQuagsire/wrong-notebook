@@ -445,12 +445,12 @@ function HomeContent() {
                 message={getProgressMessage()}
             />
 
-            <div className="container mx-auto p-4 space-y-8 pb-20">
+            <div className="container mx-auto p-3 md:p-4 space-y-4 md:space-y-8 pb-20">
                 {/* Header Section */}
-                <div className="flex justify-between items-start gap-4">
+                <div className="flex justify-between items-start gap-2 md:gap-4">
                     <UserWelcome />
 
-                    <div className="flex items-center gap-2 bg-card p-2 rounded-lg border shadow-sm shrink-0">
+                    <div className="flex items-center gap-1 md:gap-2 bg-card p-1.5 md:p-2 rounded-lg border shadow-sm shrink-0">
                         <BroadcastNotification />
                         <SettingsDialog />
                         <Button
@@ -466,10 +466,10 @@ function HomeContent() {
                 </div>
 
                 {/* Action Center */}
-                <div className={initialNotebookId ? "flex justify-center mb-6" : "grid grid-cols-2 md:grid-cols-5 gap-4"}>
+                <div className={initialNotebookId ? "flex justify-center mb-6" : "grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-4"}>
                     <Button
                         size="lg"
-                        className={`h-auto py-4 text-base shadow-sm hover:shadow-md transition-all ${initialNotebookId ? "w-full max-w-md" : ""}`}
+                        className={`h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all ${initialNotebookId ? "w-full max-w-md" : ""}`}
                         variant={step === "upload" ? "default" : "secondary"}
                         onClick={() => { setStep("upload"); setInputMode("image"); }}
                     >
@@ -485,10 +485,10 @@ function HomeContent() {
                                 <Button
                                     variant="outline"
                                     size="lg"
-                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
+                                    className="w-full h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
                                 >
-                                    <div className="flex items-center gap-2">
-                                        <BookOpen className="h-5 w-5" />
+                                    <div className="flex items-center gap-1.5 md:gap-2">
+                                        <BookOpen className="h-4 w-4 md:h-5 md:w-5" />
                                         <span>{t.app.viewNotebook}</span>
                                     </div>
                                 </Button>
@@ -498,10 +498,10 @@ function HomeContent() {
                                 <Button
                                     variant="outline"
                                     size="lg"
-                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
+                                    className="w-full h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
                                 >
-                                    <div className="flex items-center gap-2">
-                                        <Tags className="h-5 w-5" />
+                                    <div className="flex items-center gap-1.5 md:gap-2">
+                                        <Tags className="h-4 w-4 md:h-5 md:w-5" />
                                         <span>{t.app?.tags || 'Tags'}</span>
                                     </div>
                                 </Button>
@@ -511,10 +511,10 @@ function HomeContent() {
                                 <Button
                                     variant="outline"
                                     size="lg"
-                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
+                                    className="w-full h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
                                 >
-                                    <div className="flex items-center gap-2">
-                                        <BarChart3 className="h-5 w-5" />
+                                    <div className="flex items-center gap-1.5 md:gap-2">
+                                        <BarChart3 className="h-4 w-4 md:h-5 md:w-5" />
                                         <span>{t.app?.stats || 'Stats'}</span>
                                     </div>
                                 </Button>
@@ -524,10 +524,10 @@ function HomeContent() {
                                 <Button
                                     variant="default"
                                     size="lg"
-                                    className="w-full h-auto py-4 text-base shadow-sm hover:shadow-md transition-all"
+                                    className="w-full h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all"
                                 >
-                                    <div className="flex items-center gap-2">
-                                        <BookMarked className="h-5 w-5" />
+                                    <div className="flex items-center gap-1.5 md:gap-2">
+                                        <BookMarked className="h-4 w-4 md:h-5 md:w-5" />
                                         <span>今日复习</span>
                                     </div>
                                 </Button>
@@ -539,38 +539,38 @@ function HomeContent() {
                 {step === "upload" && (
                     <div className="space-y-4">
                         {/* Input mode tabs */}
-                        <div className="flex gap-2 border-b">
+                        <div className="flex gap-1 md:gap-2 border-b overflow-x-auto">
                             <button
-                                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                                className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
                                     inputMode === "image"
                                         ? "border-primary text-primary"
                                         : "border-transparent text-muted-foreground hover:text-foreground"
                                 }`}
                                 onClick={() => setInputMode("image")}
                             >
-                                <Upload className="h-4 w-4" />
+                                <Upload className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                 {t.app?.uploadImage || "拍照上传"}
                             </button>
                             <button
-                                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                                className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
                                     inputMode === "text"
                                         ? "border-primary text-primary"
                                         : "border-transparent text-muted-foreground hover:text-foreground"
                                 }`}
                                 onClick={() => setInputMode("text")}
                             >
-                                <PenLine className="h-4 w-4" />
+                                <PenLine className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                 {t.app?.manualInput || "AI解题"}
                             </button>
                             <button
-                                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                                className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
                                     inputMode === "direct"
                                         ? "border-primary text-primary"
                                         : "border-transparent text-muted-foreground hover:text-foreground"
                                 }`}
                                 onClick={() => setInputMode("direct")}
                             >
-                                <PenLine className="h-4 w-4" />
+                                <PenLine className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                 直接录入
                             </button>
                         </div>

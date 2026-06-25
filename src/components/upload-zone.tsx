@@ -184,23 +184,23 @@ export function UploadZone({ onImageSelect, isAnalyzing }: UploadZoneProps) {
                 className={`border-2 border-dashed cursor-pointer transition-colors hover:border-primary/50 ${isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25"
                     }`}
             >
-                <CardContent className="flex flex-col items-center justify-center py-12 space-y-4 text-center min-h-[300px]">
+                <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12 space-y-3 sm:space-y-4 text-center min-h-[200px] sm:min-h-[300px]">
                     <input {...getInputProps()} />
-                    <div className="p-4 bg-muted rounded-full">
+                    <div className="p-3 sm:p-4 bg-muted rounded-full">
                         {isAnalyzing ? (
-                            <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                            <Loader2 className="h-8 w-8 sm:h-10 sm:w-10 text-primary animate-spin" />
                         ) : (
-                            <UploadCloud className="h-10 w-10 text-muted-foreground" />
+                            <UploadCloud className="h-8 w-8 sm:h-10 sm:w-10 text-muted-foreground" />
                         )}
                     </div>
                     <div className="space-y-1">
-                        <h3 className="font-semibold text-lg">
+                        <h3 className="font-semibold text-base sm:text-lg">
                             {isAnalyzing ? t.app.analyzing : t.upload.analyze}
                         </h3>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs sm:text-sm text-muted-foreground">
                             {isAnalyzing ? t.app.analyzing : t.app.dragDrop}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-2">
+                        <p className="text-xs text-muted-foreground mt-1 sm:mt-2">
                             {t.upload.support}
                         </p>
                     </div>
