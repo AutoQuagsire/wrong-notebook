@@ -367,6 +367,7 @@ export const translations = {
                 admin: "User Management",
                 danger: "Danger",
                 about: "About",
+                localLlm: "Local LLM",
             },
             about: {
                 title: "About",
@@ -1015,6 +1016,7 @@ export const translations = {
                 admin: "用户管理",
                 danger: "危险",
                 about: "关于",
+                localLlm: "本机 LLM",
             },
             about: {
                 title: "关于",

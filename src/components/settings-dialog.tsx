@@ -20,7 +20,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, Trash2, Loader2, AlertTriangle, Save, Eye, EyeOff, Languages, User, Bot, Shield, RefreshCw, Plus, Zap, CheckCircle2, XCircle, Download, Upload, BarChart3 } from "lucide-react";
+import { Settings, Trash2, Loader2, AlertTriangle, Save, Eye, EyeOff, Languages, User, Bot, Shield, RefreshCw, Plus, Zap, CheckCircle2, XCircle, Download, Upload, BarChart3, Cpu } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -30,6 +30,7 @@ import { frontendLogger } from "@/lib/frontend-logger";
 import { AppConfig, UserProfile, UpdateUserProfileRequest, OpenAIInstance } from "@/types/api";
 import { ModelSelector } from "@/components/ui/model-selector";
 import { PromptSettings } from "@/components/settings/prompt-settings";
+import { LocalLLMSettings } from "@/components/settings/local-llm-settings";
 
 import { MessageSquareText, Info, ExternalLink, Github, ScrollText } from "lucide-react";
 const MAX_OPENAI_INSTANCES = 10;
@@ -674,7 +675,7 @@ export function SettingsDialog() {
                 </DialogHeader>
 
                 <Tabs defaultValue="general" className="w-full">
-                    <TabsList className={`grid w-full grid-cols-4 ${session?.user?.role === 'admin' ? 'sm:grid-cols-7' : 'sm:grid-cols-4'} gap-1 h-auto`}>
+                    <TabsList className={`grid w-full grid-cols-5 ${session?.user?.role === 'admin' ? 'sm:grid-cols-8' : 'sm:grid-cols-5'} gap-1 h-auto`}>
                         <TabsTrigger value="general" className="px-2 sm:px-3">
                             <Languages className="h-4 w-4 sm:mr-2" />
                             <span className="hidden sm:inline">{t.settings?.tabs?.general || "General"}</span>
@@ -682,6 +683,11 @@ export function SettingsDialog() {
                         <TabsTrigger value="account" className="px-2 sm:px-3">
                             <User className="h-4 w-4 sm:mr-2" />
                             <span className="hidden sm:inline">{t.settings?.tabs?.account || "Account"}</span>
+                        </TabsTrigger>
+                        {/* 本机 LLM — 普通用户也可见 */}
+                        <TabsTrigger value="local-llm" className="px-2 sm:px-3">
+                            <Cpu className="h-4 w-4 sm:mr-2" />
+                            <span className="hidden sm:inline">{t.settings?.tabs?.localLlm || "Local LLM"}</span>
                         </TabsTrigger>
                         {session?.user?.role === 'admin' && (
                             <>
@@ -895,6 +901,13 @@ export function SettingsDialog() {
                                 </Button>
                             </div>
                         )}
+                    </TabsContent>
+
+                    {/* Local LLM Tab — 普通用户本机 LLM 配置 */}
+                    <TabsContent value="local-llm" className="space-y-4 py-4">
+                        <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+                            <LocalLLMSettings />
+                        </div>
                     </TabsContent>
 
                     {/* AI Tab */}
