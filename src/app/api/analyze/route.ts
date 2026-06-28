@@ -7,11 +7,22 @@ import { calculateGrade } from "@/lib/grade-calculator";
 import { prisma } from "@/lib/prisma";
 import { badRequest, internalError, createErrorResponse, ErrorCode } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
+import { checkSystemAIPermission } from "@/lib/ai/server-ai-permission";
 
 const logger = createLogger('api:analyze');
 
 export async function POST(req: Request) {
     logger.info('Analyze API called');
+
+    // 系统级 AI 权限检查
+    const permission = await checkSystemAIPermission();
+    if (!permission.allowed) {
+        logger.warn({ reason: permission.reason }, 'System AI permission denied');
+        return NextResponse.json(
+            { error: "SYSTEM_AI_DISABLED_FOR_USER", message: permission.reason },
+            { status: 403 }
+        );
+    }
 
     const session = await getServerSession(authOptions);
 

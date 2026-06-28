@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { getAIService } from "@/lib/ai";
 import { notFound, internalError, unauthorized } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
+import { checkSystemAIPermission } from "@/lib/ai/server-ai-permission";
 
 const logger = createLogger('api:practice:generate');
 
@@ -13,6 +14,16 @@ export async function POST(req: Request) {
 
     if (!session?.user) {
         return unauthorized("Authentication required");
+    }
+
+    // 系统级 AI 权限检查
+    const permission = await checkSystemAIPermission();
+    if (!permission.allowed) {
+        logger.warn({ reason: permission.reason }, 'System AI permission denied');
+        return NextResponse.json(
+            { error: "SYSTEM_AI_DISABLED_FOR_USER", message: permission.reason },
+            { status: 403 }
+        );
     }
 
     try {
