@@ -104,7 +104,8 @@ http://127.0.0.1:8787/health
   "service": "local-llm-proxy",
   "allowedOrigins": ["http://localhost:3000", "http://8.148.71.66"],
   "maxBodyBytes": 15728640,
-  "pna": true
+  "pna": true,
+  "envLoaded": true
 }
 ```
 
@@ -135,13 +136,28 @@ http://127.0.0.1:8787/health
 
 ### 5. 验证
 
-在 wrong-notebook 设置页点击「测试连接」，应显示连接成功。
+在 wrong-notebook 设置页：
+1. 点击「检测本机代理」，确认代理可用且当前页面 Origin 已允许。
+2. 点击「测试连接」，验证 LLM 配置正确。
 
 然后可以正常使用：
 - 首页文字 AI 解题
 - 首页拍照识题（需模型支持 vision）
 - 错题本添加页文字 AI 解题
 - 重新解题
+
+### BigModel（智谱）拍照识题特别说明
+
+BigModel 的图片请求**必须**通过本机代理，浏览器直连会触发 CORS 预检失败。
+
+如果未启用代理或代理未启动，拍照识题会在提交图片时立即提示，不会等待超时。
+
+正确配置步骤：
+1. 在设置页开启「使用本机代理解决 CORS」
+2. 在 `tools/local-llm-proxy` 目录运行 `npm start`
+3. 确保 `.env` 的 `ALLOWED_ORIGINS` 包含当前页面 Origin
+4. 在设置页点击「检测本机代理」确认通过
+5. 再执行拍照识题
 
 ## 模型要求
 

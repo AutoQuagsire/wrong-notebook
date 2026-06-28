@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Zap, CheckCircle2, XCircle, Eye, EyeOff, Trash2, AlertTriangle, Info } from "lucide-react";
+import { Loader2, Zap, CheckCircle2, XCircle, Eye, EyeOff, Trash2, AlertTriangle, Info, Wifi, WifiOff } from "lucide-react";
 import {
     ClientLlmConfig,
     DEFAULT_CLIENT_LLM_CONFIG,
@@ -15,10 +15,93 @@ import {
     hasCompleteConfig,
     maskApiKey,
 } from "@/lib/client-llm-config";
+import { checkLocalProxyHealth, type ProxyHealthResult } from "@/lib/client-llm-chat";
 
 interface TestResult {
     success: boolean;
     message: string;
+}
+
+/** 检测本机代理健康状态的内联按钮 */
+function DetectProxyButton({ config }: { config: ClientLlmConfig }) {
+    const [checking, setChecking] = useState(false);
+    const [result, setResult] = useState<ProxyHealthResult | null>(null);
+
+    if (!config.proxyEnabled || !config.proxyUrl?.trim()) return null;
+
+    const handleCheck = async () => {
+        setChecking(true);
+        setResult(null);
+        try {
+            const r = await checkLocalProxyHealth(config.proxyUrl);
+            setResult(r);
+        } catch {
+            setResult({ ok: false, allowedOrigins: [], currentOriginAllowed: false, error: "LOCAL_PROXY_UNAVAILABLE" });
+        } finally {
+            setChecking(false);
+        }
+    };
+
+    const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+    const ok = result?.ok;
+    const originOk = result?.currentOriginAllowed;
+
+    return (
+        <div className="space-y-2 mt-3 p-3 border rounded-md bg-muted/30">
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCheck}
+                disabled={checking}
+                className="w-full"
+            >
+                {checking ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : ok ? (
+                    <Wifi className="mr-2 h-4 w-4 text-green-600" />
+                ) : result ? (
+                    <WifiOff className="mr-2 h-4 w-4 text-red-600" />
+                ) : (
+                    <Wifi className="mr-2 h-4 w-4" />
+                )}
+                {checking ? "检测中..." : "检测本机代理"}
+            </Button>
+
+            {result && (
+                <div className={`text-xs p-2 rounded ${ok && originOk ? "bg-green-50 border border-green-200 text-green-800" : "bg-red-50 border border-red-200 text-red-800"}`}>
+                    {!ok && (
+                        <div className="space-y-1">
+                            <p className="font-medium">无法连接本机代理。</p>
+                            <p>请在 <code className="bg-red-100 px-1 rounded">tools/local-llm-proxy</code> 目录运行 <code className="bg-red-100 px-1 rounded">npm start</code>。</p>
+                            <p className="text-red-600">不要直接运行 <code className="bg-red-100 px-1 rounded">node server.mjs</code>。</p>
+                        </div>
+                    )}
+                    {ok && !originOk && (
+                        <div className="space-y-1">
+                            <p className="font-medium">本机代理已启动，但未允许当前页面 Origin。</p>
+                            <p>当前页面 Origin：<code className="bg-red-100 px-1 rounded">{currentOrigin}</code></p>
+                            <p>代理允许的 Origins：<code className="bg-red-100 px-1 rounded">{result.allowedOrigins.join(", ") || "(无)"}</code></p>
+                            <p>请将当前 Origin 添加到 <code className="bg-red-100 px-1 rounded">tools/local-llm-proxy/.env</code> 的 <code className="bg-red-100 px-1 rounded">ALLOWED_ORIGINS</code>，然后重启代理。</p>
+                        </div>
+                    )}
+                    {ok && originOk && (
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-1 font-medium">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                                本机代理可用。
+                            </div>
+                            <p>当前页面 Origin：<code className="bg-green-100 px-1 rounded">{currentOrigin}</code></p>
+                            <p>代理允许的 Origins：<code className="bg-green-100 px-1 rounded">{result.allowedOrigins.join(", ")}</code></p>
+                            {result.envLoaded === false && (
+                                <p className="text-amber-600">⚠️ 代理未加载 .env，可能直接运行了 node server.mjs。请改用 npm start。</p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
 
 export function LocalLLMSettings() {
@@ -298,6 +381,9 @@ export function LocalLLMSettings() {
                     <p className="text-xs text-amber-600">
                         修改 .env 后必须重启代理。启动后可访问 <code className="bg-amber-100 px-1 rounded">http://127.0.0.1:8787/health</code> 确认 allowedOrigins 正确。
                     </p>
+
+                    {/* --- 检测本机代理按钮 --- */}
+                    <DetectProxyButton config={config} />
                 </div>
             )}
 

@@ -14,6 +14,88 @@ import { parseReanswerXmlResponse } from "@/lib/ai/reanswer-parser";
 import { buildClientReanswerMessages } from "@/lib/ai/client-reanswer-prompt";
 
 // ---------------------------------------------------------------------------
+// Proxy health check
+// ---------------------------------------------------------------------------
+
+export interface ProxyHealthResult {
+    ok: boolean;
+    allowedOrigins: string[];
+    currentOriginAllowed: boolean;
+    pna?: boolean;
+    envLoaded?: boolean;
+    error?: string;
+}
+
+/**
+ * 检查本机代理是否可用。
+ *
+ * 请求代理的 GET /health，不发送 API Key、Authorization、X-Provider-Base-URL。
+ *
+ * URL 拼接规则：proxyUrl 结尾的 /v1 或 /v1/ 会被替换为 /health。
+ * 例如 http://127.0.0.1:8787/v1 → http://127.0.0.1:8787/health
+ */
+export async function checkLocalProxyHealth(proxyUrl: string): Promise<ProxyHealthResult> {
+    // 去掉末尾的 /v1 或 /v1/，确保拼成正确的 /health URL
+    const clean = proxyUrl.trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+    const healthUrl = clean + "/health";
+    const currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+
+    let response: Response;
+    try {
+        response = await fetch(healthUrl, {
+            method: "GET",
+            credentials: "omit",
+        });
+    } catch {
+        return {
+            ok: false,
+            allowedOrigins: [],
+            currentOriginAllowed: false,
+            error: "LOCAL_PROXY_UNAVAILABLE",
+        };
+    }
+
+    if (!response.ok) {
+        return {
+            ok: false,
+            allowedOrigins: [],
+            currentOriginAllowed: false,
+            error: "LOCAL_PROXY_UNAVAILABLE",
+        };
+    }
+
+    let data: {
+        ok?: boolean;
+        allowedOrigins?: string[];
+        pna?: boolean;
+        envLoaded?: boolean;
+    };
+    try {
+        data = await response.json();
+    } catch {
+        return {
+            ok: false,
+            allowedOrigins: [],
+            currentOriginAllowed: false,
+            error: "LOCAL_PROXY_UNAVAILABLE",
+        };
+    }
+
+    const origins: string[] = Array.isArray(data.allowedOrigins) ? data.allowedOrigins : [];
+    const currentAllowed = currentOrigin
+        ? origins.indexOf(currentOrigin) !== -1
+        : false;
+
+    return {
+        ok: data.ok === true,
+        allowedOrigins: origins,
+        currentOriginAllowed: currentAllowed,
+        pna: data.pna,
+        envLoaded: data.envLoaded,
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Error classification (mirrors server-side error codes for consistent UI)
 // ---------------------------------------------------------------------------
 

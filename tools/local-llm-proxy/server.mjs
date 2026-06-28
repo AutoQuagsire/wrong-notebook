@@ -114,6 +114,7 @@ var server = createServer(async function (req, res) {
             allowedOrigins: ALLOWED_ORIGINS.slice(),
             maxBodyBytes: MAX_BODY_BYTES,
             pna: true,
+            envLoaded: envLoaded,
         }));
         return;
     }

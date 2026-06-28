@@ -24,8 +24,9 @@ import { ProgressFeedback, ProgressStatus } from "@/components/ui/progress-feedb
 import { frontendLogger } from "@/lib/frontend-logger";
 import { TextInputZone } from "@/components/text-input-zone";
 import { DirectTextEditor } from "@/components/direct-text-editor";
-import { clientReanswerQuestion, clientAnalyzeImage, ClientLlmError } from "@/lib/client-llm-chat";
+import { clientReanswerQuestion, clientAnalyzeImage, ClientLlmError, checkLocalProxyHealth } from "@/lib/client-llm-chat";
 import { loadLlmConfig, hasCompleteConfig } from "@/lib/client-llm-config";
+import type { ProxyHealthResult } from "@/lib/client-llm-chat";
 
 function HomeContent() {
     const [step, setStep] = useState<"upload" | "review">("upload");
@@ -153,6 +154,56 @@ function HomeContent() {
                     alert("本机 LLM 配置不完整。请前往设置页补全 Base URL / Model / API Key。");
                     setAnalysisStep('idle');
                     return;
+                }
+
+                // --- 图片识别前置代理检查 ---
+                // BigModel 图片请求必须走本机代理（浏览器直连会触发 CORS/OPTIONS 失败）。
+                const isBigModel = localConfig.baseUrl.toLowerCase().includes("open.bigmodel.cn");
+                if (isBigModel) {
+                    if (!localConfig.proxyEnabled) {
+                        frontendLogger.warn('[HomeAnalyze]', 'BigModel image requires proxy, but proxy is disabled');
+                        alert(
+                            "BigModel 拍照识题需要启用本机代理。\n\n" +
+                            "请在设置页开启「使用本机代理解决 CORS」，\n" +
+                            "并运行 npm start 启动代理。\n\n" +
+                            "不要直接运行 node server.mjs。"
+                        );
+                        setAnalysisStep('idle');
+                        return;
+                    }
+
+                    if (localConfig.proxyUrl?.trim()) {
+                        frontendLogger.info('[HomeAnalyze]', 'Checking local proxy health');
+                        var healthResult: ProxyHealthResult = await checkLocalProxyHealth(localConfig.proxyUrl);
+
+                        if (!healthResult.ok) {
+                            frontendLogger.warn('[HomeAnalyze]', 'Local proxy unavailable');
+                            alert(
+                                "本机代理未启动。\n\n" +
+                                "请在 tools/local-llm-proxy 目录运行 npm start 启动代理。\n" +
+                                "不要直接运行 node server.mjs。\n\n" +
+                                "启动后可在设置页点击「检测本机代理」确认。"
+                            );
+                            setAnalysisStep('idle');
+                            return;
+                        }
+
+                        if (!healthResult.currentOriginAllowed) {
+                            var currentOrigin = typeof window !== "undefined" ? window.location.origin : "";
+                            frontendLogger.warn('[HomeAnalyze]', 'Local proxy origin not allowed', { currentOrigin: currentOrigin, allowedOrigins: healthResult.allowedOrigins });
+                            alert(
+                                "本机代理已启动，但未允许当前页面 Origin。\n\n" +
+                                "当前页面 Origin：" + currentOrigin + "\n" +
+                                "代理允许的 Origins：" + healthResult.allowedOrigins.join(", ") + "\n\n" +
+                                "请将当前 Origin 添加到 tools/local-llm-proxy/.env 的 ALLOWED_ORIGINS，\n" +
+                                "然后重启代理。"
+                            );
+                            setAnalysisStep('idle');
+                            return;
+                        }
+
+                        frontendLogger.info('[HomeAnalyze]', 'Local proxy health OK');
+                    }
                 }
 
                 frontendLogger.info('[HomeAnalyze]', 'Using client LLM for image analysis', { provider: localConfig.provider });
