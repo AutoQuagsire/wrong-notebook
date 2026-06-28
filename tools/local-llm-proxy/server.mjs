@@ -25,11 +25,14 @@ const PORT = parseInt(process.env.PORT || "8787", 10);
 const MAX_BODY_BYTES = parseInt(process.env.MAX_BODY_BYTES || "15728640", 10); // 15 MB
 
 // 支持多个 Origin：优先读 ALLOWED_ORIGINS（逗号分隔），回退到 ALLOWED_ORIGIN
-const originsRaw = process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "http://localhost:3000";
+const originsRaw = process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN || "";
 const ALLOWED_ORIGINS = originsRaw
     .split(",")
     .map(function (s) { return s.trim(); })
     .filter(function (s) { return s.length > 0; });
+
+// 检测 .env 是否被加载：如果没有环境变量传入，说明用户可能直接运行了 node server.mjs
+const envLoaded = !!(process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN);
 
 // ---------------------------------------------------------------------------
 // 安全常量
@@ -97,6 +100,21 @@ var server = createServer(async function (req, res) {
         }
         res.writeHead(204, corsHeaders);
         res.end();
+        return;
+    }
+
+    // --- 健康检查 GET /health ---
+    if (req.method === "GET" && req.url === "/health") {
+        res.writeHead(200, Object.assign({}, buildCorsHeaders(requestOrigin), {
+            "Content-Type": "application/json",
+        }));
+        res.end(JSON.stringify({
+            ok: true,
+            service: "local-llm-proxy",
+            allowedOrigins: ALLOWED_ORIGINS.slice(),
+            maxBodyBytes: MAX_BODY_BYTES,
+            pna: true,
+        }));
         return;
     }
 
@@ -197,7 +215,20 @@ var server = createServer(async function (req, res) {
 server.listen(PORT, "127.0.0.1", function () {
     console.log("[proxy] 本机 LLM 代理已启动");
     console.log("[proxy] 监听: http://127.0.0.1:" + PORT + VALID_PATH);
-    console.log("[proxy] 允许 CORS Origins: " + ALLOWED_ORIGINS.join(", "));
+    console.log("[proxy] 健康检查: http://127.0.0.1:" + PORT + "/health");
+
+    if (!envLoaded) {
+        console.log("[proxy] ╔══════════════════════════════════════════════════════╗");
+        console.log("[proxy] ║  WARNING: 未检测到 ALLOWED_ORIGINS / ALLOWED_ORIGIN  ║");
+        console.log("[proxy] ║  请使用 npm start 启动代理，确保 .env 被加载。       ║");
+        console.log("[proxy] ║  不要直接运行 node server.mjs，                     ║");
+        console.log("[proxy] ║  除非你手动设置了环境变量。                        ║");
+        console.log("[proxy] ╚══════════════════════════════════════════════════════╝");
+        console.log("[proxy] 允许 CORS Origins: (无) — 请求可能全部被拒绝");
+    } else {
+        console.log("[proxy] 允许 CORS Origins: " + ALLOWED_ORIGINS.join(", "));
+    }
+
     console.log("[proxy] Private Network Access: enabled");
     console.log("[proxy] 最大请求体: " + (MAX_BODY_BYTES / 1024 / 1024).toFixed(0) + " MB");
     console.log("[proxy] 按 Ctrl+C 停止");

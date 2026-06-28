@@ -283,13 +283,20 @@ export function LocalLLMSettings() {
                         disabled={!config.enabled}
                     />
                     <p className="text-xs text-muted-foreground">
-                        本机代理监听地址。Proxy 负责转发本机请求到 Provider Base URL 并解决 CORS，不会保存你的 API Key。
+                        Proxy 负责转发本机请求到 Provider Base URL 并解决 CORS，不会保存你的 API Key。
+                    </p>
+                    <p className="text-xs text-amber-600 mt-1">
+                        ⚠️ 启动本机代理时请使用 <code className="bg-amber-100 px-1 rounded">npm start</code>，不要直接运行 <code className="bg-amber-100 px-1 rounded">node server.mjs</code>。
+                        否则 .env 不会被加载，ALLOWED_ORIGINS 可能不生效。
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                         当前页面 Origin：<code className="bg-muted px-1 rounded">{typeof window !== "undefined" ? window.location.origin : ""}</code>
                     </p>
+                    <p className="text-xs text-muted-foreground">
+                        请确保本机代理 <code className="bg-muted px-1 rounded">.env</code> 的 <code className="bg-muted px-1 rounded">ALLOWED_ORIGINS</code> 包含上面的 Origin 地址。
+                    </p>
                     <p className="text-xs text-amber-600">
-                        请确保本机代理 .env 的 ALLOWED_ORIGINS 包含上面的 Origin 地址。如果缺少，请在代理 .env 中添加并重启代理。
+                        修改 .env 后必须重启代理。启动后可访问 <code className="bg-amber-100 px-1 rounded">http://127.0.0.1:8787/health</code> 确认 allowedOrigins 正确。
                     </p>
                 </div>
             )}
