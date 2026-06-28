@@ -2,67 +2,52 @@
 date: 2026-06-28
 task: TASK-032C-VERIFY
 branch: main
-head: 58f83c7
+head: eb86140
 ---
 
-## Summary
+## 结论
 
-Code audit verification of TASK-032C stateless proxy refactor. No code changes made.
+验收 TASK-032C 无状态代理模式。所有自动检查通过，代码审计确认链路正确。无代码变更。
 
-## Findings
+## Git
+- HEAD: eb86140
+- working tree: clean (only untracked claude-reinstall.md)
+- 7 commits since v1.5.12 (c830f78 → eb86140)
 
-### What was verified (code audit)
+## 代码审计结果
 
-1. **7 commits since v1.5.12**: c830f78 → 95786ed → 737ea71 → 0ae977a → a9733f0 → 863fb2f → 58f83c7
-2. **No forbidden files touched**: `/api/analyze`, `/api/reanswer`, providers, `config/app-config.json`, `prisma/` all untouched
-3. **Proxy .env.example clean**: Only PORT / ALLOWED_ORIGIN / MAX_BODY_BYTES — no PROVIDER_BASE_URL, no PROVIDER_API_KEY
-4. **`buildChatCompletionsRequest()` used by both**: `clientReanswerQuestion()` (line 190) and `clientAnalyzeImage()` (line 356)
-5. **Proxy mode**: Sets `X-Provider-Base-URL` header to user's baseUrl; `Authorization` forwarded as-is
-6. **`credentials: "omit"`** on both fetch calls (lines 206, 372)
-7. **`console.error` removed from image analyze path**: Now uses `frontendLogger.warn()` — won't trigger Dev Overlay
-8. **Settings UI**: Proxy toggle + Proxy URL field correctly implemented
-9. **Proxy server**: Reads `X-Provider-Base-URL` from request, validates http(s) prefix, forwards Authorization verbatim
-10. **Proxy logging**: Only logs status, target host, body size, duration — never logs Authorization or API Key
-11. **`hasCompleteConfig()`**: Always requires apiKey (restored original logic)
-
-### Automated checks
-
-| Check | Result |
+| 审计项 | 结果 |
 |---|---|
-| `npx tsc --noEmit` | ✅ 0 errors |
-| `npm run lint` | ✅ 0 errors |
-| `npm test` (vitest) | ✅ 37 files, 634 passed |
-| `npx next build --webpack` | ✅ compiled, 48 pages |
-| `node -c tools/local-llm-proxy/server.mjs` | ✅ syntax OK |
-| `grep ":\s*(string\|number)" server.mjs` | ✅ no TypeScript annotations |
+| `.env.example` 不包含 API Key | ✅ 只有 PORT / ALLOWED_ORIGIN / MAX_BODY_BYTES |
+| `server.mjs` 无 TS 类型标注 | ✅ `node -c` 通过，grep 无匹配 |
+| `buildChatCompletionsRequest()` 双路径 | ✅ clientReanswerQuestion (L190) + clientAnalyzeImage (L356) |
+| 代理模式发送 X-Provider-Base-URL | ✅ client-llm-chat.ts:135, settings UI:72 |
+| 代理读取 X-Provider-Base-URL | ✅ server.mjs:71, 强校验 http(s) |
+| CORS 允许 X-Provider-Base-URL | ✅ server.mjs:55 |
+| Authorization 转发 | ✅ server.mjs:112-115 |
+| credentials omit | ✅ client-llm-chat.ts:206, 372 |
+| console.error 已去 | ✅ image analyze 路径用 frontendLogger.warn |
+| 设置页 UI 完整 | ✅ proxy toggle + proxy URL + CORS 说明 |
+| API routes 未修改 | ✅ /api/analyze、/api/reanswer 未动 |
+| Providers 未修改 | ✅ openai/azure/gemini providers 未动 |
+| DB 未修改 | ✅ prisma/ 未动 |
 
-### Manual verification
+## 自动检查
 
-Not performed — requires browser + running server. User should test:
-
-1. Start proxy
-2. Configure settings page with:
-   - Provider Base URL: `https://open.bigmodel.cn/api/paas/v4`
-   - Model: vision-capable model
-   - API Key: user's real key
-   - Proxy: enabled, `http://127.0.0.1:8787/v1`
-3. Test connection → should succeed through proxy
-4. Home text solve → should route through proxy
-5. Home image analyze → should route through proxy, enter review step
-6. Kill proxy → should show error "无法连接本机代理", no fallback to /api/analyze
-
-### Privacy audit
-
-| Check | Confirmed |
+| 检查 | 结果 |
 |---|---|
-| API Key not in proxy .env | ✅ .env.example has no API key fields |
-| API Key not sent to wrong-notebook backend | ✅ proxy mode bypasses /api/reanswer and /api/analyze |
-| Proxy forwards Authorization without storing | ✅ code audit confirms |
-| Image not sent to wrong-notebook backend | ✅ local proxy path, no server API call |
-| credentials: "omit" | ✅ both fetch calls |
+| npx tsc --noEmit | ✅ 0 errors |
+| npm run lint | ✅ 0 errors |
+| npm test (vitest) | ✅ 37/634 passed |
+| npx next build --webpack | ✅ 48 static pages |
+| node -c server.mjs | ✅ Syntax OK |
 
-### Conclusion
+## 未验证（需要浏览器 + GUI）
 
-- **Stateless proxy usable**: ✅ code audit confirms correct implementation
-- **Blockers**: None
-- **Ready for user manual test**: ✅
+用户应手动测试：
+1. 启动无状态代理 `cd tools/local-llm-proxy && npm start`
+2. 配置设置页 (Provider Base URL, Model, API Key, 开启代理)
+3. 测试连接 → 通过代理转发
+4. 首页文字 AI 解题 → 通过代理
+5. 首页拍照识题 → 通过代理进入 review
+6. 关闭代理 → 提示错误，不回退 /api/analyze
