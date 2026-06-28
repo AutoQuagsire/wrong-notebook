@@ -285,6 +285,12 @@ export function LocalLLMSettings() {
                     <p className="text-xs text-muted-foreground">
                         本机代理监听地址。Proxy 负责转发本机请求到 Provider Base URL 并解决 CORS，不会保存你的 API Key。
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        当前页面 Origin：<code className="bg-muted px-1 rounded">{typeof window !== "undefined" ? window.location.origin : ""}</code>
+                    </p>
+                    <p className="text-xs text-amber-600">
+                        请确保本机代理 .env 的 ALLOWED_ORIGINS 包含上面的 Origin 地址。如果缺少，请在代理 .env 中添加并重启代理。
+                    </p>
                 </div>
             )}
 
