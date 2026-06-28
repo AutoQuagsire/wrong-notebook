@@ -39,3 +39,4 @@
 
 ## Commit
 - `20f3158` fix: add local proxy health checks for image analysis
+- `5d85ae4` chore: update CLAUDE.md

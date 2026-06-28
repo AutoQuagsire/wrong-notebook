@@ -21,6 +21,13 @@ Claude Code 协助本项目的约束文件。
 YYYY-MM-DD-agent-task-name.md
 ```
 
+日志完成后追加到 `CLAUDE.md` 底部的最新提交记录区。
+
+## 最新提交
+
+- `20f3158` fix: add local proxy health checks for image analysis
+- `74f52db` docs: TASK-034E agent log
+
 日志只写摘要，不粘贴完整终端输出。格式遵循 `docs/agent-logs/README.md` 模板。
 
 ## 修改代码前
