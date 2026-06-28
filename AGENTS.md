@@ -112,3 +112,128 @@
 - 题目、答案、解析内容以可移植的 Markdown/LaTeX/文本格式存储，不要以 Web-only HTML 作为内容源。
 - 任何移动端/H5/App/小程序迁移任务必须显式标记并分小阶段执行。普通 Web 功能开发期间不要创建 mobile 项目、跨平台包或新顶层目录。
 - 如果任务需要移动端截图验证、UI 视觉检查、图片识别或手写作答分析，必须显式标注需要多模态模型，并尽量批量处理这类任务。
+
+## 11. 生产环境约束
+
+本项目已有真实生产部署。
+
+### 生产服务器
+
+- 公网入口: `http://8.148.71.66`
+- 服务器项目路径: `/var/www/wrong-notebook`
+- PM2 应用名: `wrong-notebook`
+- 生产数据库: `/var/www/wrong-notebook/prisma/production.db`
+- 备份脚本: `/opt/wrong-notebook/backup.sh`
+- 恢复指南(服务器): `/opt/wrong-notebook/RESTORE.md`
+
+### 核心规则
+
+- 本地机器用于开发和测试，生产服务器用于运行真实服务。
+- 本地 `dev.db` 绝对不能覆盖生产 `production.db`。
+- 生产 `production.db` 包含真实用户数据，必须保护。
+
+### 未经明确人工批准禁止
+
+- 不要在服务器上直接修改业务代码。
+- 不要覆盖 `/var/www/wrong-notebook/prisma/production.db`。
+- 不要在线上执行 `npx prisma migrate reset`。
+- 不要删除生产备份。
+- 不要暴露或打印 `.env` 值。
+- 不要提交 `.env`、数据库文件、备份文件或密钥。
+- 不要用本地 `dev.db` 替代生产数据。
+- 不要在正常使用时间随意重启或重新部署生产环境。
+
+### 代码部署前检查
+
+1. 确认本地测试/构建通过。
+2. 提交代码到 Git 并推送到远程仓库。
+3. SSH 到服务器，先备份：
+
+```bash
+/opt/wrong-notebook/backup.sh
+```
+
+4. 确认备份完整性后再部署。
+
+### 标准生产部署流程
+
+在服务器执行：
+
+```bash
+cd /var/www/wrong-notebook
+git status --short
+git fetch --all --tags
+git pull --ff-only origin main
+
+npx prisma generate
+rm -rf .next
+
+export NODE_OPTIONS="--max-old-space-size=1024"
+export NEXT_TELEMETRY_DISABLED=1
+npx next build --webpack
+
+pm2 restart wrong-notebook
+pm2 status
+
+curl -I http://127.0.0.1:3000
+curl -I http://8.148.71.66
+```
+
+重要：
+
+- 在 2GB VPS 上必须使用 `npx next build --webpack`。
+- 不要在服务器上执行默认 Turbopack build，除非明确批准。
+- 如果 `package-lock.json` 有变动，先 `npm ci` 再 build。
+
+### Prisma Schema 变更时的部署
+
+本地：`npx prisma migrate dev --name <name>`
+
+生产：
+
+```bash
+/opt/wrong-notebook/backup.sh
+cd /var/www/wrong-notebook
+git pull --ff-only origin main
+npm ci
+npx prisma generate
+npx prisma migrate deploy
+npx next build --webpack
+pm2 restart wrong-notebook
+```
+
+绝对不要：`npx prisma migrate reset`
+
+### 仅 UI / 前端变更时
+
+```bash
+git pull --ff-only origin main
+npx next build --webpack
+pm2 restart wrong-notebook
+```
+
+### 环境变量变更
+
+- 只更新 `.env.example` 中的变量名，不写密钥值。
+- 服务器上手动编辑 `.env`。
+- 绝对不要在日志或聊天中打印 `.env` 值。
+- 改 `.env` 后重启 PM2。
+
+### 部署后冒烟测试
+
+每次部署后确认：登录页、错题列表、详情页、今日复习、新增测试题均正常，日志无持续报错。
+
+```bash
+pm2 logs wrong-notebook --lines 120
+tail -n 80 /var/log/nginx/error.log
+```
+
+### 生产数据原则
+
+```
+Git 管理代码。
+production.db 存储真实数据。
+backup.sh 保护数据。
+服务器运行生产环境。
+本地机器开发测试。
+```

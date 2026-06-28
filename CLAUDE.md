@@ -35,3 +35,6 @@ YYYY-MM-DD-agent-task-name.md
 - 不自动 push。
 - 不提交 `.env`、`prisma/dev.db`、API Key、数据库备份、用户图片。
 - 不修改 `AGENTS.md` 之外的项目文档（除非任务要求）。
+- 不直接操作生产服务器 `/var/www/wrong-notebook`，除非任务明确要求。
+- 不在生产环境执行 `npx prisma migrate reset`。
+- 不用本地 `prisma/dev.db` 覆盖生产 `production.db`。
