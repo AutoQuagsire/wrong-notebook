@@ -45,7 +45,7 @@ const PROVIDER_URL = `${PROVIDER_BASE_URL}/chat/completions`;
 // 日志（不打印 API Key）
 // ---------------------------------------------------------------------------
 
-function log(method: string, status: number, detail?: string) {
+function log(method, status, detail) {
     const ts = new Date().toISOString().slice(11, 19);
     const parts = [ts, method, String(status)];
     if (detail) parts.push(detail);
