@@ -7,6 +7,8 @@ import { UploadZone } from "@/components/upload-zone";
 import { CorrectionEditor } from "@/components/correction-editor";
 import { ImageCropper } from "@/components/image-cropper";
 import { ParsedQuestion } from "@/lib/ai";
+import { normalizeReanswerToParsedQuestion } from "@/lib/reanswer-normalizer";
+import type { ReanswerQuestionResult } from "@/lib/ai/types";
 import { apiClient } from "@/lib/api-client";
 import { AnalyzeResponse, Notebook, AppConfig } from "@/types/api";
 import { Button } from "@/components/ui/button";
@@ -245,14 +247,7 @@ export default function AddErrorPage() {
         try {
             setAnalysisStep('analyzing');
 
-            const result = await apiClient.post<{
-                answerText: string;
-                analysis: string;
-                knowledgePoints: string[];
-                wrongAnswerText: string;
-                mistakeAnalysis: string;
-                mistakeStatus: string;
-            }>("/api/reanswer", {
+            const result = await apiClient.post<ReanswerQuestionResult>("/api/reanswer", {
                 questionText,
                 language,
                 subject: notebook?.name || undefined,
@@ -261,17 +256,9 @@ export default function AddErrorPage() {
             setAnalysisStep('processing');
             setProgress(100);
 
-            const parsed: ParsedQuestion = {
+            const parsed: ParsedQuestion = normalizeReanswerToParsedQuestion(result, {
                 questionText,
-                answerText: result.answerText,
-                analysis: result.analysis,
-                knowledgePoints: result.knowledgePoints || [],
-                wrongAnswerText: result.wrongAnswerText || "",
-                mistakeAnalysis: result.mistakeAnalysis || "",
-                mistakeStatus: (result.mistakeStatus as "unknown" | "not_attempted" | "wrong_attempt") || "unknown",
-                subject: "数学",
-                requiresImage: false,
-            };
+            });
 
             setCurrentImage(null);
             setParsedData(parsed);

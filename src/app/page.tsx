@@ -7,6 +7,8 @@ import { UploadZone } from "@/components/upload-zone";
 import { CorrectionEditor } from "@/components/correction-editor";
 import { ImageCropper } from "@/components/image-cropper";
 import { ParsedQuestion } from "@/lib/ai";
+import { normalizeReanswerToParsedQuestion } from "@/lib/reanswer-normalizer";
+import type { ReanswerQuestionResult } from "@/lib/ai/types";
 import { UserWelcome } from "@/components/user-welcome";
 import { apiClient } from "@/lib/api-client";
 import { AnalyzeResponse, Notebook, AppConfig } from "@/types/api";
@@ -308,14 +310,7 @@ function HomeContent() {
                 ? notebooks.find(n => n.id === targetNotebookId)
                 : undefined;
 
-            const result = await apiClient.post<{
-                answerText: string;
-                analysis: string;
-                knowledgePoints: string[];
-                wrongAnswerText: string;
-                mistakeAnalysis: string;
-                mistakeStatus: string;
-            }>("/api/reanswer", {
+            const result = await apiClient.post<ReanswerQuestionResult>("/api/reanswer", {
                 questionText,
                 language,
                 subject: matchedNotebook?.name || undefined,
@@ -324,17 +319,9 @@ function HomeContent() {
             setAnalysisStep('processing');
             setProgress(100);
 
-            const parsed: ParsedQuestion = {
+            const parsed: ParsedQuestion = normalizeReanswerToParsedQuestion(result, {
                 questionText,
-                answerText: result.answerText,
-                analysis: result.analysis,
-                knowledgePoints: result.knowledgePoints || [],
-                wrongAnswerText: result.wrongAnswerText || "",
-                mistakeAnalysis: result.mistakeAnalysis || "",
-                mistakeStatus: (result.mistakeStatus as "unknown" | "not_attempted" | "wrong_attempt") || "unknown",
-                subject: "数学", // Default, will be overridden by notebook selection
-                requiresImage: false,
-            };
+            });
 
             setCurrentImage(null); // No image for text input
             setParsedData(parsed);
