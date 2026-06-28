@@ -24,6 +24,8 @@ import { ProgressFeedback, ProgressStatus } from "@/components/ui/progress-feedb
 import { frontendLogger } from "@/lib/frontend-logger";
 import { TextInputZone } from "@/components/text-input-zone";
 import { DirectTextEditor } from "@/components/direct-text-editor";
+import { clientReanswerQuestion, ClientLlmError } from "@/lib/client-llm-chat";
+import { loadLlmConfig, hasCompleteConfig } from "@/lib/client-llm-config";
 
 function HomeContent() {
     const [step, setStep] = useState<"upload" | "review">("upload");
@@ -310,11 +312,55 @@ function HomeContent() {
                 ? notebooks.find(n => n.id === targetNotebookId)
                 : undefined;
 
-            const result = await apiClient.post<ReanswerQuestionResult>("/api/reanswer", {
-                questionText,
-                language,
-                subject: matchedNotebook?.name || undefined,
-            }, { timeout: aiTimeout });
+            // ---------- 检查本机 LLM 配置 ----------
+            const localConfig = loadLlmConfig();
+            const useLocalLlm = localConfig.enabled;
+
+            let result: ReanswerQuestionResult;
+
+            if (useLocalLlm) {
+                // 本机 LLM 路径
+                if (!hasCompleteConfig(localConfig)) {
+                    alert("本机 LLM 配置不完整。请前往设置页补全 Base URL / Model / API Key。");
+                    setAnalysisStep('idle');
+                    return;
+                }
+
+                frontendLogger.info('[HomeTextSubmit]', 'Using client LLM', { provider: localConfig.provider });
+
+                try {
+                    result = await clientReanswerQuestion({ questionText });
+                } catch (error: unknown) {
+                    console.error("[HomeTextSubmit] Client LLM failed:", error instanceof Error ? error.message : String(error));
+
+                    if (error instanceof ClientLlmError) {
+                        const code = error.errorCode;
+                        const messages: Record<string, string> = {
+                            AI_AUTH_ERROR: "本机 LLM API Key 无效，请检查设置。未回退系统 AI。",
+                            AI_CONNECTION_FAILED: "无法连接本机 LLM，请检查 Base URL 或 CORS 设置。未回退系统 AI。",
+                            AI_RESPONSE_ERROR: "本机 LLM 返回格式异常，请检查 Model 是否正确。未回退系统 AI。",
+                            AI_TIMEOUT_ERROR: "本机 LLM 请求超时，请稍后重试。未回退系统 AI。",
+                            AI_QUOTA_EXCEEDED: "本机 LLM 请求频率过高或配额不足。未回退系统 AI。",
+                            AI_PERMISSION_DENIED: "本机 LLM 权限不足，请检查 API Key。未回退系统 AI。",
+                            AI_NOT_FOUND: "本机 LLM Base URL 或模型不存在。未回退系统 AI。",
+                            AI_SERVICE_UNAVAILABLE: "本机 LLM 服务不可用，请稍后重试。未回退系统 AI。",
+                        };
+                        alert(messages[code] || `本机 LLM 调用失败，未回退系统 AI。（${code}）`);
+                    } else {
+                        alert("本机 LLM 调用失败，未回退系统 AI。");
+                    }
+
+                    setAnalysisStep('idle');
+                    return;
+                }
+            } else {
+                // 原服务端路径
+                result = await apiClient.post<ReanswerQuestionResult>("/api/reanswer", {
+                    questionText,
+                    language,
+                    subject: matchedNotebook?.name || undefined,
+                }, { timeout: aiTimeout });
+            }
 
             setAnalysisStep('processing');
             setProgress(100);
