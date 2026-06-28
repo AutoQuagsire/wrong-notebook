@@ -3,7 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Clock3, Eye, History, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock3, ChevronDown, Eye, History, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -84,6 +84,7 @@ export default function ReviewPage() {
     const startTimeRef = useRef(Date.now());
 
     const [fromToday, setFromToday] = useState(false);
+    const [showOriginalImage, setShowOriginalImage] = useState(false);
     useEffect(() => {
         setFromToday(new URLSearchParams(window.location.search).get("from") === "today");
     }, []);
@@ -295,11 +296,26 @@ export default function ReviewPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {item.originalImageUrl ? (
-                            <img
-                                src={item.originalImageUrl}
-                                alt="原错题图片"
-                                className="max-h-[420px] w-full rounded-lg border object-contain"
-                            />
+                            <div className="border border-dashed rounded-lg p-3 bg-muted/20">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full justify-between text-sm font-medium text-muted-foreground hover:text-foreground"
+                                    onClick={() => setShowOriginalImage(v => !v)}
+                                >
+                                    <span className="flex items-center gap-1.5">
+                                        <ChevronDown className={`h-4 w-4 transition-transform ${showOriginalImage ? "rotate-180" : ""}`} />
+                                        原错题图片{showOriginalImage ? " - 收起原图" : " - 展开原图"}
+                                    </span>
+                                </Button>
+                                {showOriginalImage && (
+                                    <img
+                                        src={item.originalImageUrl}
+                                        alt="原错题图片"
+                                        className="mt-2 max-h-[420px] w-full rounded-lg border object-contain"
+                                    />
+                                )}
+                            </div>
                         ) : null}
                         <MarkdownRenderer content={displayQuestion} />
                     </CardContent>
