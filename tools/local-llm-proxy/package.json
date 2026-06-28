@@ -5,7 +5,7 @@
   "description": "User-local proxy that forwards browser requests to an external LLM API. Solves the CORS problem when the provider does not allow browser cross-origin requests.",
   "type": "module",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node --env-file=.env server.mjs"
   },
   "engines": {
     "node": ">=18"

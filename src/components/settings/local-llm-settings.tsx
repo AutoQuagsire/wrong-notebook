@@ -55,7 +55,7 @@ export function LocalLLMSettings() {
         if (!hasCompleteConfig(config)) {
             setTestResult({
                 success: false,
-                message: "请先填写完整的 Base URL、Model 和 API Key。",
+                message: "请先填写完整的 Provider Base URL、Model 和 API Key。",
             });
             return;
         }
@@ -63,16 +63,24 @@ export function LocalLLMSettings() {
         setTesting(true);
         setTestResult(null);
 
-        const baseUrl = config.baseUrl.replace(/\/+$/, "");
-        const url = `${baseUrl}/chat/completions`;
+        const apiKey = config.apiKey || "";
+        let url: string;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+        if (config.proxyEnabled && config.proxyUrl?.trim()) {
+            url = `${config.proxyUrl.trim().replace(/\/+$/, "")}/chat/completions`;
+            headers["X-Provider-Base-URL"] = config.baseUrl.trim().replace(/\/+$/, "");
+        } else {
+            url = `${config.baseUrl.trim().replace(/\/+$/, "")}/chat/completions`;
+        }
+        if (apiKey) {
+            headers["Authorization"] = `Bearer ${apiKey}`;
+        }
 
         try {
             const response = await fetch(url, {
                 method: "POST",
-                headers: {
-                    Authorization: `Bearer ${config.apiKey}`,
-                    "Content-Type": "application/json",
-                },
+                headers,
                 body: JSON.stringify({
                     model: config.model,
                     messages: [{ role: "user", content: "请只回复 OK" }],
@@ -91,12 +99,12 @@ export function LocalLLMSettings() {
                 const statusText = response.statusText || `HTTP ${response.status}`;
                 setTestResult({
                     success: false,
-                    message: `测试失败。请检查 Base URL、Model、API Key，或确认该服务是否允许浏览器 CORS 请求。(${statusText})`,
+                    message: `测试失败。请检查 Provider Base URL、Model、API Key，或确认该服务是否允许浏览器 CORS 请求。(${statusText})`,
                 });
             }
         } catch (error: unknown) {
             const msg = error instanceof TypeError && error.message === "Failed to fetch"
-                ? "测试失败。请检查 Base URL 是否正确，或确认该服务是否允许浏览器 CORS 跨域请求。"
+                ? "测试失败。请检查 Proxy URL 或 Provider Base URL 是否正确，或确认该服务是否允许浏览器 CORS 跨域请求。"
                 : `测试失败。${error instanceof Error ? error.message : "网络错误"}`;
             setTestResult({ success: false, message: msg });
         } finally {
@@ -133,10 +141,10 @@ export function LocalLLMSettings() {
                 <p className="font-medium mt-1">解决方式：</p>
                 <ol className="list-decimal pl-4 space-y-0.5">
                     <li>使用支持浏览器 CORS 的 OpenAI-compatible endpoint；</li>
-                    <li>或运行<b>用户本机代理</b>，并把 Base URL 设置为本机代理地址，例如 <code className="bg-amber-100 px-1 rounded">http://127.0.0.1:8787/v1</code>。</li>
+                    <li>或启动<b>用户本机代理</b>，并勾选下方&ldquo;使用本机代理解决 CORS&ldquo;。</li>
                 </ol>
                 <p className="text-amber-700 mt-1">
-                    本机代理运行在用户自己的电脑上，API Key 只保存在本机 .env 文件中，不会上传 wrong-notebook 服务器。
+                    本机代理运行在用户自己的电脑上，仅做无状态 CORS 转发。API Key 仍由下方填写，代理不会保存 API Key。API Key 不会上传 wrong-notebook 服务器。
                 </p>
                 <p>
                     代理工具位于项目 <code className="bg-amber-100 px-1 rounded">tools/local-llm-proxy/</code> 目录，详见 README。
@@ -177,7 +185,7 @@ export function LocalLLMSettings() {
             {/* Base URL */}
             <div className="space-y-2">
                 <Label htmlFor="llm-baseurl">
-                    Base URL <span className="text-destructive">*</span>
+                    Provider Base URL <span className="text-destructive">*</span>
                 </Label>
                 <Input
                     id="llm-baseurl"
@@ -186,6 +194,9 @@ export function LocalLLMSettings() {
                     placeholder="https://api.openai.com/v1"
                     disabled={!config.enabled}
                 />
+                <p className="text-xs text-muted-foreground">
+                    外部 LLM 服务的地址。例如：https://open.bigmodel.cn/api/paas/v4 或 https://api.openai.com/v1。
+                </p>
             </div>
 
             {/* Model */}
@@ -239,6 +250,43 @@ export function LocalLLMSettings() {
                     </p>
                 )}
             </div>
+
+            {/* Proxy Toggle */}
+            <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                    <Label htmlFor="llm-proxy-enabled" className="font-medium">
+                        使用本机代理解决 CORS
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                        如果你的 LLM 服务不允许浏览器跨域请求，请启用此选项。
+                    </p>
+                </div>
+                <Switch
+                    id="llm-proxy-enabled"
+                    checked={config.proxyEnabled}
+                    onCheckedChange={(v) => updateField("proxyEnabled", v)}
+                    disabled={!config.enabled}
+                />
+            </div>
+
+            {/* Proxy URL */}
+            {config.proxyEnabled && (
+                <div className="space-y-2">
+                    <Label htmlFor="llm-proxy-url">
+                        Proxy URL
+                    </Label>
+                    <Input
+                        id="llm-proxy-url"
+                        value={config.proxyUrl}
+                        onChange={(e) => updateField("proxyUrl", e.target.value)}
+                        placeholder="http://127.0.0.1:8787/v1"
+                        disabled={!config.enabled}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        本机代理监听地址。Proxy 负责转发本机请求到 Provider Base URL 并解决 CORS，不会保存你的 API Key。
+                    </p>
+                </div>
+            )}
 
             {/* Remember checkbox with risk warning */}
             <div className="space-y-2">

@@ -29,6 +29,8 @@ export interface ClientLlmConfig {
     model: string;
     apiKey: string;
     remember: boolean;
+    proxyEnabled: boolean;
+    proxyUrl: string;
 }
 
 export const DEFAULT_CLIENT_LLM_CONFIG: ClientLlmConfig = {
@@ -38,6 +40,8 @@ export const DEFAULT_CLIENT_LLM_CONFIG: ClientLlmConfig = {
     model: "",
     apiKey: "",
     remember: false,
+    proxyEnabled: false,
+    proxyUrl: "http://127.0.0.1:8787/v1",
 };
 
 // ---------------------------------------------------------------------------
@@ -150,39 +154,22 @@ export function clearLlmConfig(): void {
 }
 
 /**
- * 判断 Base URL 是否指向本机 localhost 代理。
- * 本机代理一般路径固定为 /v1/chat/completions。
- */
-function isLocalhostBaseUrl(baseUrl: string): boolean {
-    try {
-        const host = new URL(baseUrl).hostname;
-        return host === "127.0.0.1" || host === "localhost" || host === "[::1]";
-    } catch {
-        return false;
-    }
-}
-
-/**
  * 判断配置是否可用的最小条件：
  * - enabled = true
  * - baseUrl 非空
  * - model 非空
- * - apiKey 非空（除非 baseUrl 是本机 localhost 代理，此时 apiKey 可选）
+ * - apiKey 非空
  */
 export function hasCompleteConfig(config: ClientLlmConfig): boolean {
-    const hasBaseUrl =
-        typeof config.baseUrl === "string" && config.baseUrl.trim().length > 0;
-    const hasModel =
-        typeof config.model === "string" && config.model.trim().length > 0;
-    const hasApiKey =
-        typeof config.apiKey === "string" && config.apiKey.trim().length > 0;
-
-    // 本机代理使用自己的 .env API Key，前端可以不填 apiKey
-    if (hasBaseUrl && isLocalhostBaseUrl(config.baseUrl)) {
-        return config.enabled === true && hasBaseUrl && hasModel;
-    }
-
-    return config.enabled === true && hasBaseUrl && hasModel && hasApiKey;
+    return (
+        config.enabled === true &&
+        typeof config.baseUrl === "string" &&
+        config.baseUrl.trim().length > 0 &&
+        typeof config.model === "string" &&
+        config.model.trim().length > 0 &&
+        typeof config.apiKey === "string" &&
+        config.apiKey.trim().length > 0
+    );
 }
 
 /**

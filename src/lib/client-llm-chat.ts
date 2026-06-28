@@ -107,6 +107,51 @@ function looksLikeVisionUnsupported(body: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Centralized request construction
+// ---------------------------------------------------------------------------
+
+interface ChatCompletionsRequest {
+    url: string;
+    headers: Record<string, string>;
+}
+
+/**
+ * 根据配置决定请求 URL 和 headers。
+ *
+ * 直连模式:   POST {baseUrl}/chat/completions
+ *              Authorization: Bearer <apiKey>
+ *
+ * 代理模式:    POST {proxyUrl}/chat/completions
+ *              Authorization: Bearer <apiKey>
+ *              X-Provider-Base-URL: <baseUrl>
+ */
+function buildChatCompletionsRequest(config: ClientLlmConfig): ChatCompletionsRequest {
+    const apiKey = config.apiKey || "";
+
+    if (config.proxyEnabled && typeof config.proxyUrl === "string" && config.proxyUrl.trim().length > 0) {
+        const proxyUrl = config.proxyUrl.trim().replace(/\/+$/, "");
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+            "X-Provider-Base-URL": config.baseUrl.trim().replace(/\/+$/, ""),
+        };
+        if (apiKey) {
+            headers["Authorization"] = `Bearer ${apiKey}`;
+        }
+        return { url: `${proxyUrl}/chat/completions`, headers };
+    }
+
+    // Direct mode
+    const baseUrl = config.baseUrl.trim().replace(/\/+$/, "");
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    };
+    if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+    return { url: `${baseUrl}/chat/completions`, headers };
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -142,8 +187,7 @@ export async function clientReanswerQuestion(
         );
     }
 
-    const baseUrl = config.baseUrl.replace(/\/+$/, "");
-    const url = `${baseUrl}/chat/completions`;
+    const { url, headers } = buildChatCompletionsRequest(config);
 
     const messages = buildClientReanswerMessages({
         questionText: input.questionText,
@@ -153,10 +197,7 @@ export async function clientReanswerQuestion(
     try {
         response = await fetch(url, {
             method: "POST",
-            headers: {
-                Authorization: `Bearer ${config.apiKey}`,
-                "Content-Type": "application/json",
-            },
+            headers,
             body: JSON.stringify({
                 model: config.model,
                 messages,
@@ -312,8 +353,7 @@ export async function clientAnalyzeImage(
 
     const imageDataUrl = toImageDataUrl(input.imageBase64, input.mimeType);
 
-    const baseUrl = config.baseUrl.replace(/\/+$/, "");
-    const url = `${baseUrl}/chat/completions`;
+    const { url, headers } = buildChatCompletionsRequest(config);
 
     const messages = buildClientAnalyzeMessages({
         imageDataUrl,
@@ -323,10 +363,7 @@ export async function clientAnalyzeImage(
     try {
         response = await fetch(url, {
             method: "POST",
-            headers: {
-                Authorization: `Bearer ${config.apiKey}`,
-                "Content-Type": "application/json",
-            },
+            headers,
             body: JSON.stringify({
                 model: config.model,
                 messages,
