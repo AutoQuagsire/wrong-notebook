@@ -162,7 +162,9 @@ function HomeContent() {
                         imageBase64: base64Image,
                     });
                 } catch (error: unknown) {
-                    console.error("[HomeAnalyze] Client LLM image analysis failed:", error instanceof Error ? error.message : String(error));
+                    frontendLogger.warn('[HomeAnalyze]', 'Client LLM image analysis failed', {
+                        error: error instanceof Error ? error.message.substring(0, 200) : String(error).substring(0, 200),
+                    });
 
                     if (error instanceof ClientLlmError) {
                         const code = error.errorCode;
