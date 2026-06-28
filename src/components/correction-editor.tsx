@@ -22,6 +22,8 @@ import { normalizeMistakeStatusForSave, type MistakeStatus } from "@/lib/mistake
 import type { ReanswerQuestionResult } from "@/lib/ai/types";
 import { buildReanswerRequestBody } from "@/lib/reanswer-request";
 import { GeogebraDemo } from "@/components/geogebra-demo";
+import { clientReanswerQuestion, ClientLlmError } from "@/lib/client-llm-chat";
+import { loadLlmConfig, hasCompleteConfig } from "@/lib/client-llm-config";
 
 interface ParsedQuestionWithSubject extends ParsedQuestion {
     subjectId?: string;
@@ -45,6 +47,37 @@ type ReanswerErrorMessages = {
     connectionFailed?: string;
     responseError?: string;
 };
+
+/** 根据本机 LLM 错误码拼接用户可见提示 */
+function getClientLlmErrorMessage(
+    error: ClientLlmError,
+    tMessages?: ReanswerErrorMessages
+): string {
+    const code = error.errorCode;
+    switch (code) {
+        case "AI_NOT_CONFIGURED":
+        case "AI_CONFIG_INCOMPLETE":
+            return error.message; // 已包含中文指示
+        case "AI_AUTH_ERROR":
+            return tMessages?.authError || "本机 LLM API Key 无效，请检查设置";
+        case "AI_CONNECTION_FAILED":
+            return tMessages?.connectionFailed || "无法连接本机 LLM，请检查 Base URL 或 CORS 设置";
+        case "AI_RESPONSE_ERROR":
+            return tMessages?.responseError || "本机 LLM 返回格式异常，请检查 Model 是否正确";
+        case "AI_TIMEOUT_ERROR":
+            return "本机 LLM 请求超时，请稍后重试";
+        case "AI_QUOTA_EXCEEDED":
+            return "本机 LLM 请求频率过高或配额不足";
+        case "AI_PERMISSION_DENIED":
+            return "本机 LLM 权限不足，请检查 API Key";
+        case "AI_NOT_FOUND":
+            return "本机 LLM Base URL 或模型不存在";
+        case "AI_SERVICE_UNAVAILABLE":
+            return "本机 LLM 服务不可用，请稍后重试";
+        default:
+            return tMessages?.default || "本机 LLM 调用失败，未回退系统 AI";
+    }
+}
 
 export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, initialSubjectId, aiTimeout }: CorrectionEditorProps) {
     const [data, setData] = useState<ParsedQuestionWithSubject>({
@@ -93,6 +126,56 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
         }
 
         setIsReanswering(true);
+
+        // 检查是否启用了本机 LLM
+        const localConfig = loadLlmConfig();
+        const useLocalLlm = localConfig.enabled;
+
+        if (useLocalLlm) {
+            // ---------- 本机 LLM 路径 ----------
+            if (!hasCompleteConfig(localConfig)) {
+                alert("本机 LLM 配置不完整。请前往设置页补全 Base URL / Model / API Key。");
+                setIsReanswering(false);
+                return;
+            }
+
+            frontendLogger.info('[Reanswer]', 'Using client LLM', { provider: localConfig.provider });
+
+            try {
+                const result = await clientReanswerQuestion({
+                    questionText: data.questionText,
+                });
+
+                setData(prev => ({
+                    ...prev,
+                    answerText: result.answerText,
+                    analysis: result.analysis,
+                    knowledgePoints: result.knowledgePoints,
+                    wrongAnswerText: result.wrongAnswerText || "",
+                    mistakeAnalysis: result.mistakeAnalysis || "",
+                    mistakeStatus: normalizeMistakeStatusForSave(
+                        result.mistakeStatus,
+                        result.wrongAnswerText
+                    ),
+                }));
+
+                alert(t.editor.reanswerSuccess || '✅ 本机 LLM — Answer and analysis updated!');
+            } catch (error: unknown) {
+                console.error("[Reanswer] Client LLM failed:", error instanceof Error ? error.message : String(error));
+                const reanswerErrors: ReanswerErrorMessages = t.errors?.reanswer || {};
+
+                if (error instanceof ClientLlmError) {
+                    alert(getClientLlmErrorMessage(error, reanswerErrors));
+                } else {
+                    alert(reanswerErrors.default || "本机 LLM 调用失败，未回退系统 AI");
+                }
+            } finally {
+                setIsReanswering(false);
+            }
+            return;
+        }
+
+        // ---------- 原服务端路径 ----------
         try {
             const requestBody = buildReanswerRequestBody({
                 questionText: data.questionText,
