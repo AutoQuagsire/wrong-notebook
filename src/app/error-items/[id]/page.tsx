@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CheckCircle, XCircle, RefreshCw, Trash2, Edit, Save, X, Box, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, RefreshCw, Trash2, Edit, Save, X, Box, Loader2, ChevronDown } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -57,6 +57,7 @@ export default function ErrorDetailPage() {
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notesInput, setNotesInput] = useState("");
     const [isImageViewerOpen, setIsImageViewerOpen] = useState(false);
+    const [showOriginalImage, setShowOriginalImage] = useState(false);
     const [isEditingTags, setIsEditingTags] = useState(false);
     const [tagsInput, setTagsInput] = useState<string[]>([]);
     const [isEditingMetadata, setIsEditingMetadata] = useState(false);
@@ -488,22 +489,35 @@ export default function ErrorDetailPage() {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 {item.originalImageUrl && (
-                                    <div
-                                        className="cursor-pointer hover:opacity-90 transition-opacity"
-                                        onClick={() => setIsImageViewerOpen(true)}
-                                        title={t.detail?.clickToView || 'Click to view full image'}
-                                    >
-                                        <p className="text-sm font-medium mb-2 text-muted-foreground">
-                                            {t.detail.originalProblem || "Original Problem"}
-                                        </p>
-                                        <img
-                                            src={item.originalImageUrl}
-                                            alt={t.detail.originalProblem || "Original Problem"}
-                                            className="w-full rounded-lg border hover:border-primary/50 transition-colors"
-                                        />
-                                        <p className="text-xs text-muted-foreground mt-1 text-center">
-                                            💡 {t.detail?.clickToEnlarge || 'Click to enlarge'}
-                                        </p>
+                                    <div className="border border-dashed rounded-lg p-3 bg-muted/20">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="w-full justify-between text-sm font-medium text-muted-foreground hover:text-foreground"
+                                            onClick={() => setShowOriginalImage(v => !v)}
+                                        >
+                                            <span className="flex items-center gap-1.5">
+                                                <ChevronDown className={`h-4 w-4 transition-transform ${showOriginalImage ? "rotate-180" : ""}`} />
+                                                {t.detail?.originalProblem || "Original Problem"}
+                                                {showOriginalImage ? ` - 收起原图` : ` - 展开原图`}
+                                            </span>
+                                        </Button>
+                                        {showOriginalImage && (
+                                            <div
+                                                className="mt-2 cursor-pointer hover:opacity-90 transition-opacity"
+                                                onClick={() => setIsImageViewerOpen(true)}
+                                                title={t.detail?.clickToView || 'Click to view full image'}
+                                            >
+                                                <img
+                                                    src={item.originalImageUrl}
+                                                    alt={t.detail?.originalProblem || "Original Problem"}
+                                                    className="w-full rounded-lg border hover:border-primary/50 transition-colors"
+                                                />
+                                                <p className="text-xs text-muted-foreground mt-1 text-center">
+                                                    💡 {t.detail?.clickToEnlarge || 'Click to enlarge'}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
