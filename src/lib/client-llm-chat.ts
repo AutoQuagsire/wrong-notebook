@@ -151,3 +151,171 @@ export async function clientReanswerQuestion(
     // Parse the XML response using the shared parser from TASK-031B
     return parseReanswerXmlResponse(content);
 }
+
+// ---------------------------------------------------------------------------
+// Image analyze (client-side, browser-only)
+// ---------------------------------------------------------------------------
+
+export interface ClientAnalyzeInput {
+    imageBase64: string;
+}
+
+const ANALYZE_IMAGE_SYSTEM_PROMPT = `你是一位专业的考试题目分析专家。用户为你提供一张题目图片，请你分析并给出完整解答。
+
+请使用简体中文作答。
+
+你的响应输出必须严格遵循以下自定义 XML 标签格式。严禁使用 JSON 或 Markdown 代码块。
+
+<question_text>
+在此处填写题目的完整文本。使用 Markdown 格式。数学公式使用 LaTeX（行内 $...$，块级 $$...$$）。
+如果图片中有表格，用 Markdown 表格语法转录。
+</question_text>
+
+<answer_text>
+在此处填写正确答案。使用 Markdown 和 LaTeX 符号。
+</answer_text>
+
+<analysis>
+在此处填写详细步骤解析。使用简体中文。解析要清晰完整。公式使用行内 $...$、块级 $$...$$。
+</analysis>
+
+<knowledge_points>
+在此处填写知识点，使用逗号分隔，最多 5 个，例如：知识点1, 知识点2
+</knowledge_points>
+
+<subject>
+填写以下学科之一：数学, 物理, 化学, 生物, 英语, 语文, 历史, 地理, 政治, 其他
+</subject>
+
+<requires_image>
+如果题目依赖图片（如几何图、函数图），填写 true；否则填写 false。
+</requires_image>
+
+<wrong_answer_text>
+如果图片中有学生的错误解答，请摘录；没有则留空。
+</wrong_answer_text>
+
+<mistake_status>
+填写以下值之一：wrong_attempt（有错误解答）、not_attempted（不会做）、unknown（无法判断）。
+</mistake_status>
+
+<mistake_analysis>
+如果有错误解答，分析错误原因；没有则留空。
+</mistake_analysis>
+
+关键规则：
+1. 必须严格包含上述 10 个 XML 标签，不要输出其他内容。
+2. 纯文本内容，不要转义反斜杠。
+3. 不要修改或重复题目，只提供识别、分析、答案。`;
+
+function buildClientAnalyzeMessages(input: {
+    imageBase64: string;
+}): Array<{ role: "system" | "user"; content: unknown }> {
+    return [
+        { role: "system", content: ANALYZE_IMAGE_SYSTEM_PROMPT },
+        {
+            role: "user",
+            content: [
+                { type: "text", text: "请识别并解析图片中的题目。" },
+                {
+                    type: "image_url",
+                    image_url: {
+                        url: input.imageBase64,
+                    },
+                },
+            ],
+        },
+    ];
+}
+
+/**
+ * 使用本机 LLM 拍照识题。
+ *
+ * 返回 ParsedQuestion，与 /api/analyze 返回结构兼容。
+ */
+export async function clientAnalyzeImage(
+    input: ClientAnalyzeInput,
+): Promise<import("@/lib/ai").ParsedQuestion> {
+    const { parseAnalyzeXmlResponse } = await import("@/lib/ai/analyze-parser");
+    const config = loadLlmConfig();
+
+    if (!config.enabled) {
+        throw new ClientLlmError(
+            "本机 LLM 未启用。请在设置中启用后重试。",
+            "AI_NOT_CONFIGURED",
+        );
+    }
+
+    if (!hasCompleteConfig(config)) {
+        throw new ClientLlmError(
+            "本机 LLM 配置不完整。请前往设置页补全 Base URL / Model / API Key。",
+            "AI_CONFIG_INCOMPLETE",
+        );
+    }
+
+    const baseUrl = config.baseUrl.replace(/\/+$/, "");
+    const url = `${baseUrl}/chat/completions`;
+
+    const messages = buildClientAnalyzeMessages({
+        imageBase64: input.imageBase64,
+    });
+
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${config.apiKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                model: config.model,
+                messages,
+                max_tokens: 8192,
+            }),
+            credentials: "omit",
+        });
+    } catch (fetchError: unknown) {
+        throw classifyError(fetchError);
+    }
+
+    if (!response.ok) {
+        throw new ClientLlmError(
+            `AI 服务返回 HTTP ${response.status}`,
+            classifyError(new Error(String(response.status))).errorCode,
+        );
+    }
+
+    let data: { choices?: Array<{ message?: { content?: string } }> };
+    try {
+        data = await response.json();
+    } catch {
+        throw new ClientLlmError(
+            "AI_RESPONSE_ERROR: 本机 LLM 返回非 JSON 格式",
+            "AI_RESPONSE_ERROR",
+        );
+    }
+
+    const content = data.choices?.[0]?.message?.content;
+    if (!content || content.trim().length === 0) {
+        throw new ClientLlmError(
+            "AI_RESPONSE_ERROR: 本机 LLM 返回内容为空",
+            "AI_RESPONSE_ERROR",
+        );
+    }
+
+    // Parse the XML response
+    try {
+        return parseAnalyzeXmlResponse(content);
+    } catch (parseError: unknown) {
+        const message =
+            parseError instanceof Error ? parseError.message : String(parseError);
+        if (message.includes("AI_RESPONSE_ERROR")) {
+            throw new ClientLlmError(message, "AI_RESPONSE_ERROR");
+        }
+        throw new ClientLlmError(
+            `AI_RESPONSE_ERROR: 本机 LLM 返回格式异常`,
+            "AI_RESPONSE_ERROR",
+        );
+    }
+}

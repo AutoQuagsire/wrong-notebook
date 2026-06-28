@@ -24,7 +24,7 @@ import { ProgressFeedback, ProgressStatus } from "@/components/ui/progress-feedb
 import { frontendLogger } from "@/lib/frontend-logger";
 import { TextInputZone } from "@/components/text-input-zone";
 import { DirectTextEditor } from "@/components/direct-text-editor";
-import { clientReanswerQuestion, ClientLlmError } from "@/lib/client-llm-chat";
+import { clientReanswerQuestion, clientAnalyzeImage, ClientLlmError } from "@/lib/client-llm-chat";
 import { loadLlmConfig, hasCompleteConfig } from "@/lib/client-llm-config";
 
 function HomeContent() {
@@ -137,14 +137,61 @@ function HomeContent() {
                 size: base64Image.length
             });
 
-            frontendLogger.info('[HomeAnalyze]', 'Step 2/5: Calling API endpoint /api/analyze');
+            frontendLogger.info('[HomeAnalyze]', 'Step 2/5: Calling AI service');
             setAnalysisStep('analyzing');
             const apiStartTime = Date.now();
-            const data = await apiClient.post<AnalyzeResponse>("/api/analyze", {
-                imageBase64: base64Image,
-                language: language,
-                subjectId: initialNotebookId || autoSelectedNotebookId || undefined
-            }, { timeout: aiTimeout }); // Use configured timeout
+
+            // ---------- 检查本机 LLM 配置 ----------
+            const localConfig = loadLlmConfig();
+            const useLocalLlm = localConfig.enabled;
+
+            let data: AnalyzeResponse;
+
+            if (useLocalLlm) {
+                // 本机 LLM 路径
+                if (!hasCompleteConfig(localConfig)) {
+                    alert("本机 LLM 配置不完整。请前往设置页补全 Base URL / Model / API Key。");
+                    setAnalysisStep('idle');
+                    return;
+                }
+
+                frontendLogger.info('[HomeAnalyze]', 'Using client LLM for image analysis', { provider: localConfig.provider });
+
+                try {
+                    data = await clientAnalyzeImage({
+                        imageBase64: base64Image,
+                    });
+                } catch (error: unknown) {
+                    console.error("[HomeAnalyze] Client LLM image analysis failed:", error instanceof Error ? error.message : String(error));
+
+                    if (error instanceof ClientLlmError) {
+                        const code = error.errorCode;
+                        const messages: Record<string, string> = {
+                            AI_AUTH_ERROR: "本机 LLM API Key 无效，请检查设置。未回退系统 AI。",
+                            AI_CONNECTION_FAILED: "无法连接本机 LLM，请检查 Base URL 或 CORS 设置。未回退系统 AI。",
+                            AI_RESPONSE_ERROR: "本机 LLM 返回格式异常，请检查 Model 是否支持 vision。未回退系统 AI。",
+                            AI_TIMEOUT_ERROR: "本机 LLM 请求超时，请稍后重试。未回退系统 AI。",
+                            AI_QUOTA_EXCEEDED: "本机 LLM 请求频率过高或配额不足。未回退系统 AI。",
+                            AI_PERMISSION_DENIED: "本机 LLM 权限不足，请检查 API Key。未回退系统 AI。",
+                            AI_NOT_FOUND: "本机 LLM Base URL 或模型不存在。未回退系统 AI。",
+                            AI_SERVICE_UNAVAILABLE: "本机 LLM 服务不可用，请稍后重试。未回退系统 AI。",
+                        };
+                        alert(messages[code] || `本机 LLM 拍照识题失败，未回退系统 AI。（${code}）`);
+                    } else {
+                        alert("本机 LLM 拍照识题失败，未回退系统 AI。");
+                    }
+
+                    setAnalysisStep('idle');
+                    return;
+                }
+            } else {
+                // 原服务端路径
+                data = await apiClient.post<AnalyzeResponse>("/api/analyze", {
+                    imageBase64: base64Image,
+                    language: language,
+                    subjectId: initialNotebookId || autoSelectedNotebookId || undefined
+                }, { timeout: aiTimeout }); // Use configured timeout
+            }
             const apiDuration = Date.now() - apiStartTime;
             frontendLogger.info('[HomeAnalyze]', 'API response received, validating data', {
                 apiDuration
