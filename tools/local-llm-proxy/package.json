@@ -1,0 +1,13 @@
+{
+  "name": "local-llm-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "User-local proxy that forwards browser requests to an external LLM API. Solves the CORS problem when the provider does not allow browser cross-origin requests.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

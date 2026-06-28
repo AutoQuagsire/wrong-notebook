@@ -120,8 +120,37 @@ export function LocalLLMSettings() {
                     隐私说明
                 </p>
                 <p>API Key 仅保存在当前浏览器，不会上传到 wrong-notebook 后端。</p>
-                <p>当前阶段仅保存配置，暂未接入 AI 解题功能。</p>
-                <p>后续会先接入「错题详情页重新解题」。</p>
+                <p>已接入：首页文字 AI 解题、错题本添加页文字 AI 解题、首页拍照识题、编辑器重新解题。</p>
+            </div>
+
+            {/* CORS / Proxy Notice */}
+            <div className="p-3 border border-amber-200 rounded-md bg-amber-50 text-xs text-amber-800 space-y-1">
+                <p className="font-medium flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    CORS / 网络错误说明
+                </p>
+                <p>如果填写第三方 LLM 官方 Base URL 后测试连接或发送请求时出现 CORS / Failed to fetch，说明该服务不允许浏览器直接跨域调用。</p>
+                <p className="font-medium mt-1">解决方式：</p>
+                <ol className="list-decimal pl-4 space-y-0.5">
+                    <li>使用支持浏览器 CORS 的 OpenAI-compatible endpoint；</li>
+                    <li>或运行<b>用户本机代理</b>，并把 Base URL 设置为本机代理地址，例如 <code className="bg-amber-100 px-1 rounded">http://127.0.0.1:8787/v1</code>。</li>
+                </ol>
+                <p className="text-amber-700 mt-1">
+                    本机代理运行在用户自己的电脑上，API Key 只保存在本机 .env 文件中，不会上传 wrong-notebook 服务器。
+                </p>
+                <p>
+                    代理工具位于项目 <code className="bg-amber-100 px-1 rounded">tools/local-llm-proxy/</code> 目录，详见 README。
+                </p>
+            </div>
+
+            {/* Vision Model Notice */}
+            <div className="p-3 border border-blue-200 rounded-md bg-blue-50 text-xs text-blue-800 space-y-1">
+                <p className="font-medium flex items-center gap-1">
+                    <Info className="h-3.5 w-3.5" />
+                    拍照识题说明
+                </p>
+                <p>测试连接只验证文本请求可用。拍照识题还要求模型支持图片输入 image_url（vision 能力）。</p>
+                <p>如果拍照识题失败并提示模型不支持图片，请确认所选模型支持视觉能力（如 gpt-4o、gpt-4-turbo 等）。</p>
             </div>
 
             {/* Enabled Switch */}
