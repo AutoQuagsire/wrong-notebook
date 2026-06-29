@@ -25,6 +25,7 @@ YYYY-MM-DD-agent-task-name.md
 
 ## 最新提交
 
+- `03cc457` fix: prevent \n-to-newline replacement from corrupting LaTeX \neq in math blocks
 - `20f3158` fix: add local proxy health checks for image analysis
 - `74f52db` docs: TASK-034E agent log
 
