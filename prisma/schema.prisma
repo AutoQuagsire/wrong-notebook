@@ -85,10 +85,10 @@ model ErrorItem {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   subjectId      String?
   subject        Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  
+
   originalImageUrl String
   ocrText          String?
-  
+
   // AI Analysis
   questionText     String? // Parsed question
   answerText       String? // AI provided answer
@@ -98,6 +98,9 @@ model ErrorItem {
   mistakeStatus    String? // not_attempted, wrong_attempt, unknown
   knowledgePoints  String? // [DEPRECATED] JSON string - kept for migration only
   geogebraCommands String? // GeoGebra commands for interactive demo (JSON or newline-separated)
+
+  // Question type classification
+  questionType     String   @default("OTHER") // CHOICE | FILL_BLANK | CALCULATION | PROOF | OTHER
 
   // New: many-to-many relation with KnowledgeTag
   tags             KnowledgeTag[]

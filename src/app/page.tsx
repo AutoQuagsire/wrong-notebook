@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { UploadZone } from "@/components/upload-zone";
 import { CorrectionEditor } from "@/components/correction-editor";
+import type { ParsedQuestionWithSubject } from "@/components/correction-editor";
 import { ImageCropper } from "@/components/image-cropper";
 import { ParsedQuestion } from "@/lib/ai";
 import { normalizeReanswerToParsedQuestion } from "@/lib/reanswer-normalizer";
@@ -357,7 +358,7 @@ function HomeContent() {
         }
     };
 
-    const handleSave = async (finalData: ParsedQuestion & { subjectId?: string }): Promise<void> => {
+    const handleSave = async (finalData: ParsedQuestionWithSubject): Promise<void> => {
         frontendLogger.info('[HomeSave]', 'Starting save process', {
             hasQuestionText: !!finalData.questionText,
             hasAnswerText: !!finalData.answerText,

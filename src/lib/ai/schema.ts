@@ -18,6 +18,7 @@ export const ParsedQuestionSchema = z.object({
     ]),
     knowledgePoints: z.array(z.string()).max(5, "知识点最多 5 个"),
     requiresImage: z.boolean().optional().default(false), // 题目是否依赖图片（如几何题）
+    questionType: z.enum(["CHOICE", "FILL_BLANK", "CALCULATION", "PROOF", "OTHER"]).optional().default("OTHER"),
 });
 
 /**

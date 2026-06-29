@@ -1,7 +1,7 @@
 export type ReanswerRequestBody = {
     questionText: string;
     language: 'zh' | 'en';
-    subject: string;
+    subject?: string;
     imageBase64?: string;
     gradeSemester?: string;
 };
@@ -15,14 +15,14 @@ export function buildReanswerRequestBody({
 }: {
     questionText: string;
     language: 'zh' | 'en';
-    subject: string;
+    subject?: string;
     imagePreview?: string | null;
     gradeSemester?: string;
 }): ReanswerRequestBody {
     const requestBody: ReanswerRequestBody = {
         questionText,
         language,
-        subject,
+        subject: subject || undefined,
     };
 
     if (imagePreview) {

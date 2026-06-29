@@ -68,5 +68,6 @@ export function parseAnalyzeXmlResponse(content: string): ParsedQuestion {
         wrongAnswerText: wrongAnswerText || "",
         mistakeAnalysis: mistakeAnalysis || "",
         mistakeStatus,
+        questionType: "CHOICE" as const, // default, caller may override
     };
 }
