@@ -84,11 +84,7 @@ export default function ReviewPage() {
     const errorItemId = typeof params.errorItemId === "string" ? params.errorItemId : "";
     const startTimeRef = useRef(Date.now());
 
-    const [fromToday, setFromToday] = useState(false);
     const [showOriginalImage, setShowOriginalImage] = useState(false);
-    useEffect(() => {
-        setFromToday(new URLSearchParams(window.location.search).get("from") === "today");
-    }, []);
 
     const [item, setItem] = useState<ReviewItem | null>(null);
     const [loading, setLoading] = useState(true);
@@ -173,6 +169,15 @@ export default function ReviewPage() {
             window.clearInterval(timer);
         };
     }, [answerVisible, item]);
+
+    // 四级自评提交成功后自动返回上一页面
+    useEffect(() => {
+        if (!savedRecord) return;
+        const timer = setTimeout(() => {
+            router.back();
+        }, 1500);
+        return () => clearTimeout(timer);
+    }, [savedRecord, router]);
 
     const handleSaveNotes = async () => {
         if (notesSaving || !errorItemId) return;
@@ -524,16 +529,6 @@ export default function ReviewPage() {
                                             <p className="mt-2 font-medium">
                                                 本题下次复习：{formatReviewDate(savedRecord.reviewResult.nextReviewAt)}
                                             </p>
-                                        )}
-                                        {fromToday && (
-                                            <div className="mt-3 pt-3 border-t border-green-200">
-                                                <Link href="/review/today">
-                                                    <Button variant="outline" size="sm">
-                                                        <ArrowLeft className="mr-1.5 h-4 w-4" />
-                                                        返回今日复习
-                                                    </Button>
-                                                </Link>
-                                            </div>
                                         )}
                                     </div>
                                 ) : null}
