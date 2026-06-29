@@ -26,12 +26,12 @@ import type { ParsedQuestion } from "./types";
 export function parseAnalyzeXmlResponse(content: string): ParsedQuestion {
     const questionText = extractXmlTag(content, "question_text");
     const answerText = extractXmlTag(content, "answer_text");
-    const analysis = extractXmlTag(content, "analysis");
+    const analysis = extractXmlTag(content, "analysis"); // 快速模式允许为空
 
     // Critical fields must be present
-    if (!questionText || !answerText || !analysis) {
+    if (!questionText || !answerText) {
         throw new Error(
-            "AI_RESPONSE_ERROR: 本机 LLM 返回缺少必要字段 (question_text / answer_text / analysis)"
+            "AI_RESPONSE_ERROR: 本机 LLM 返回缺少必要字段 (question_text / answer_text)"
         );
     }
 
