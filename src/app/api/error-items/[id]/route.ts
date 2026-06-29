@@ -7,6 +7,7 @@ import { unauthorized, forbidden, notFound, internalError } from "@/lib/api-erro
 import { createLogger } from "@/lib/logger";
 import { findParentTagIdForGrade } from "@/lib/tag-recognition";
 import { normalizeMistakeStatusForSave } from "@/lib/mistake-status";
+import { normalizeQuestionType } from "@/lib/question-type";
 
 const logger = createLogger('api:error-items:id');
 
@@ -75,7 +76,7 @@ export async function PUT(
         }
 
         const body = await req.json();
-        const { knowledgePoints, gradeSemester, paperLevel, questionText, answerText, analysis, subjectId,  wrongAnswerText, mistakeAnalysis, mistakeStatus, geogebraCommands } = body;
+        const { knowledgePoints, gradeSemester, paperLevel, questionText, answerText, analysis, subjectId,  wrongAnswerText, mistakeAnalysis, mistakeStatus, geogebraCommands, questionType } = body;
 
         const errorItem = await prisma.errorItem.findUnique({
             where: { id },
@@ -116,6 +117,7 @@ export async function PUT(
             );
         }
         if (geogebraCommands !== undefined) updateData.geogebraCommands = geogebraCommands || null;
+        if (questionType !== undefined) updateData.questionType = normalizeQuestionType(questionType);
 
         // 处理 knowledgePoints (标签)
         if (knowledgePoints !== undefined) {

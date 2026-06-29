@@ -57,6 +57,7 @@ interface ImportData {
         masteryLevel: number;
         gradeSemester: string | null;
         paperLevel: string | null;
+        questionType?: string | null;
         createdAt: string;
         updatedAt: string;
         tags: Array<{ id: string; name: string; subject: string }>;
@@ -276,6 +277,7 @@ export async function POST(req: Request) {
                         masteryLevel: safeMasteryLevel(item.masteryLevel),
                         gradeSemester: item.gradeSemester,
                         paperLevel: item.paperLevel,
+                        questionType: item.questionType || "OTHER",
                         createdAt: safeParseDate(item.createdAt),
                     },
                 });

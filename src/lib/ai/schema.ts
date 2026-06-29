@@ -7,7 +7,7 @@ import { z } from 'zod';
 export const ParsedQuestionSchema = z.object({
     questionText: z.string().min(1, "题目文本不能为空"),
     answerText: z.string().min(1, "答案不能为空"),
-    analysis: z.string().min(1, "解析不能为空"),
+    analysis: z.string().default(""), // 快速模式允许空解析
     wrongAnswerText: z.string().optional().default(""),
     mistakeAnalysis: z.string().optional().default(""),
     mistakeStatus: z.enum(["not_attempted", "wrong_attempt", "unknown"]).optional().default("unknown"),
@@ -18,6 +18,7 @@ export const ParsedQuestionSchema = z.object({
     ]),
     knowledgePoints: z.array(z.string()).max(5, "知识点最多 5 个"),
     requiresImage: z.boolean().optional().default(false), // 题目是否依赖图片（如几何题）
+    questionType: z.enum(["CHOICE", "FILL_BLANK", "CALCULATION", "PROOF", "OTHER"]).optional().default("OTHER"),
 });
 
 /**

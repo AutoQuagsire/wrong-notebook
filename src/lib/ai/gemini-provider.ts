@@ -145,7 +145,8 @@ export class GeminiProvider implements AIService {
             mistakeStatus,
             subject,
             knowledgePoints,
-            requiresImage
+            requiresImage,
+            questionType: "CHOICE" as const,
         };
 
         // Final Schema Validation

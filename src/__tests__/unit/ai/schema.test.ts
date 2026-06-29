@@ -38,12 +38,12 @@ describe('ParsedQuestionSchema 验证', () => {
             expect(result.success).toBe(false);
         });
 
-        it('analysis 不能为空', () => {
+        it('analysis 允许为空（快速模式）', () => {
             const result = ParsedQuestionSchema.safeParse({
                 ...validBaseQuestion,
                 analysis: '',
             });
-            expect(result.success).toBe(false);
+            expect(result.success).toBe(true);
         });
     });
 

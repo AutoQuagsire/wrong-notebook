@@ -19,6 +19,8 @@ import { inferSubjectFromName } from "@/lib/knowledge-tags";
 import { getMistakeStatusLabel, normalizeMistakeStatusForSave } from "@/lib/mistake-status";
 import { NotebookSelector } from "@/components/notebook-selector";
 import { GeogebraDemo } from "@/components/geogebra-demo";
+import { QUESTION_TYPE_LABELS, VALID_QUESTION_TYPES } from "@/lib/question-type";
+import type { QuestionType } from "@/lib/question-type";
 
 interface KnowledgeTag {
     id: string;
@@ -46,6 +48,7 @@ interface ErrorItemDetail {
     gradeSemester?: string | null;
     paperLevel?: string | null;
     geogebraCommands?: string | null;
+    questionType?: string | null;
 }
 
 export default function ErrorDetailPage() {
@@ -63,6 +66,7 @@ export default function ErrorDetailPage() {
     const [isEditingMetadata, setIsEditingMetadata] = useState(false);
     const [gradeSemesterInput, setGradeSemesterInput] = useState("");
     const [paperLevelInput, setPaperLevelInput] = useState("a");
+    const [questionTypeInput, setQuestionTypeInput] = useState<string>("OTHER");
     const [notebookInput, setNotebookInput] = useState<string | null>(null);
 
     const [educationStage, setEducationStage] = useState<string | undefined>(undefined);
@@ -221,6 +225,7 @@ export default function ErrorDetailPage() {
             setNotebookInput(item.subjectId || null);
             setGradeSemesterInput(item.gradeSemester || "");
             setPaperLevelInput(item.paperLevel || "a");
+            setQuestionTypeInput(item.questionType || "OTHER");
             setIsEditingMetadata(true);
         }
     };
@@ -231,6 +236,7 @@ export default function ErrorDetailPage() {
                 subjectId: notebookInput || null,
                 gradeSemester: gradeSemesterInput,
                 paperLevel: paperLevelInput,
+                questionType: questionTypeInput,
             });
 
             setIsEditingMetadata(false);
@@ -247,6 +253,7 @@ export default function ErrorDetailPage() {
         setNotebookInput(null);
         setGradeSemesterInput("");
         setPaperLevelInput("a");
+        setQuestionTypeInput("OTHER");
     };
 
     const [isEditingQuestion, setIsEditingQuestion] = useState(false);
@@ -652,6 +659,24 @@ export default function ErrorDetailPage() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                            <div className="space-y-2">
+                                                <label className="text-sm text-muted-foreground">题型</label>
+                                                <Select
+                                                    value={questionTypeInput}
+                                                    onValueChange={setQuestionTypeInput}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {VALID_QUESTION_TYPES.map((qt) => (
+                                                            <SelectItem key={qt} value={qt}>
+                                                                {QUESTION_TYPE_LABELS[qt]}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
                                             <div className="flex gap-2">
                                                 <Button size="sm" onClick={saveMetadataHandler}>
                                                     <Save className="h-4 w-4 mr-1" />
@@ -670,6 +695,14 @@ export default function ErrorDetailPage() {
                                                 <span className="font-medium">
                                                     {item.subject?.name || (t.common?.notSet || 'Not set')}
                                                 </span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-muted-foreground">题型:</span>
+                                                <Badge variant="secondary" className="text-xs">
+                                                    {item.questionType && item.questionType !== "OTHER"
+                                                        ? QUESTION_TYPE_LABELS[item.questionType as QuestionType] || item.questionType
+                                                        : "其他"}
+                                                </Badge>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-muted-foreground">{t.filter.grade}:</span>

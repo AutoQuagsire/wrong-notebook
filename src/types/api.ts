@@ -68,6 +68,7 @@ export interface ErrorItem {
     masteryLevel: number;
     gradeSemester?: string | null;
     paperLevel?: string | null;
+    questionType?: string | null;
 
     createdAt: string;
     updatedAt: string;

@@ -8,6 +8,7 @@ import { createLogger } from "@/lib/logger";
 import { findParentTagIdForGrade } from "@/lib/tag-recognition";
 import { inferSubjectFromName } from "@/lib/knowledge-tags";
 import { normalizeMistakeStatusForSave } from "@/lib/mistake-status";
+import { normalizeQuestionType } from "@/lib/question-type";
 
 const logger = createLogger('api:error-items');
 
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
             gradeSemester,
             paperLevel,
             geogebraCommands,
+            questionType,
         } = body;
 
         // 记录请求参数（不记录完整图片数据）
@@ -49,6 +51,7 @@ export async function POST(req: Request) {
             gradeSemester,
             paperLevel,
             hasGeogebraCommands: !!geogebraCommands,
+            questionType,
         }, 'Request parameters received');
 
         // 查找用户
@@ -175,6 +178,7 @@ export async function POST(req: Request) {
                     paperLevel: paperLevel,
                     geogebraCommands: geogebraCommands || null,
                     masteryLevel: 0,
+                    questionType: normalizeQuestionType(questionType),
                     tags: {
                         connect: tagConnections,
                     },

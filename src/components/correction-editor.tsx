@@ -24,8 +24,19 @@ import { buildReanswerRequestBody } from "@/lib/reanswer-request";
 import { GeogebraDemo } from "@/components/geogebra-demo";
 import { clientReanswerQuestion, ClientLlmError } from "@/lib/client-llm-chat";
 import { loadLlmConfig, hasCompleteConfig } from "@/lib/client-llm-config";
+import { QUESTION_TYPE_LABELS, VALID_QUESTION_TYPES } from "@/lib/question-type";
 
-interface ParsedQuestionWithSubject extends ParsedQuestion {
+interface ParsedQuestionWithSubject {
+    questionText: string;
+    answerText: string;
+    analysis?: string;
+    wrongAnswerText?: string;
+    mistakeAnalysis?: string;
+    mistakeStatus?: string;
+    subject?: ParsedQuestion["subject"];
+    knowledgePoints?: string[];
+    requiresImage?: boolean;
+    questionType?: string;
     subjectId?: string;
     gradeSemester?: string;
     paperLevel?: string;
@@ -33,7 +44,7 @@ interface ParsedQuestionWithSubject extends ParsedQuestion {
 }
 
 interface CorrectionEditorProps {
-    initialData: ParsedQuestion;
+    initialData: { questionText: string; answerText: string; [key: string]: unknown };
     onSave: (data: ParsedQuestionWithSubject) => Promise<void>;
     onCancel: () => void;
     imagePreview?: string | null;
@@ -84,15 +95,18 @@ function getClientLlmErrorMessage(
     }
 }
 
+export type { ParsedQuestionWithSubject };
+
 export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, initialSubjectId, aiTimeout }: CorrectionEditorProps) {
     const [data, setData] = useState<ParsedQuestionWithSubject>({
         ...initialData,
-        wrongAnswerText: initialData.wrongAnswerText || "",
-        mistakeAnalysis: initialData.mistakeAnalysis || "",
-        mistakeStatus: initialData.mistakeStatus || "unknown",
+        wrongAnswerText: (initialData as Record<string, unknown>).wrongAnswerText as string || "",
+        mistakeAnalysis: (initialData as Record<string, unknown>).mistakeAnalysis as string || "",
+        mistakeStatus: (initialData as Record<string, unknown>).mistakeStatus as string || "unknown",
         subjectId: initialSubjectId,
         gradeSemester: "",
-        paperLevel: "a"
+        paperLevel: "a",
+        questionType: (initialData as ParsedQuestionWithSubject).questionType || "OTHER",
     });
     const { t, language } = useLanguage();
     const [isReanswering, setIsReanswering] = useState(false);
@@ -366,6 +380,24 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="space-y-2">
+                            <Label>{"题型"}</Label>
+                            <Select
+                                value={data.questionType || "OTHER"}
+                                onValueChange={(val) => setData({ ...data, questionType: val })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {VALID_QUESTION_TYPES.map(qt => (
+                                        <SelectItem key={qt} value={qt}>
+                                            {QUESTION_TYPE_LABELS[qt]}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
                     <div className="space-y-2">
@@ -403,7 +435,7 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                     <div className="space-y-2">
                         <Label>{t.editor.tags}</Label>
                         <TagInput
-                            value={data.knowledgePoints}
+                            value={data.knowledgePoints || []}
                             onChange={(tags) => setData({ ...data, knowledgePoints: tags })}
                             placeholder={t.editor.tagsPlaceholder || "Enter knowledge tags..."}
                             enterHint={t.editor.createTagHint}
@@ -548,7 +580,11 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                             <CardTitle>{t.editor.preview?.analysis || "Analysis Preview"}</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <MarkdownRenderer content={data.analysis} />
+                            {data.analysis ? (
+                                <MarkdownRenderer content={data.analysis} />
+                            ) : (
+                                <p className="text-sm text-muted-foreground italic">（快速模式，无详细解析）</p>
+                            )}
                         </CardContent>
                     </Card>
 
