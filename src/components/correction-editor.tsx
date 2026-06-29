@@ -53,6 +53,11 @@ function getClientLlmErrorMessage(
     error: ClientLlmError,
     tMessages?: ReanswerErrorMessages
 ): string {
+    // 优先直接使用 error.message（已包含完整的诊断信息）
+    if (error.message && !error.message.startsWith("AI_")) {
+        return error.message;
+    }
+
     const code = error.errorCode;
     switch (code) {
         case "AI_NOT_CONFIGURED":
@@ -63,7 +68,7 @@ function getClientLlmErrorMessage(
         case "AI_CONNECTION_FAILED":
             return tMessages?.connectionFailed || "无法连接本机 LLM，请检查 Base URL 或 CORS 设置";
         case "AI_RESPONSE_ERROR":
-            return tMessages?.responseError || "本机 LLM 返回格式异常，请检查 Model 是否正确";
+            return error.message || tMessages?.responseError || "本机 LLM 返回格式异常，请检查 Model 是否正确";
         case "AI_TIMEOUT_ERROR":
             return "本机 LLM 请求超时，请稍后重试";
         case "AI_QUOTA_EXCEEDED":
@@ -75,7 +80,7 @@ function getClientLlmErrorMessage(
         case "AI_SERVICE_UNAVAILABLE":
             return "本机 LLM 服务不可用，请稍后重试";
         default:
-            return tMessages?.default || "本机 LLM 调用失败，未回退系统 AI";
+            return error.message || tMessages?.default || "本机 LLM 调用失败，未回退系统 AI";
     }
 }
 

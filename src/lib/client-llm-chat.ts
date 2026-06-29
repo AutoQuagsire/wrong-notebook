@@ -234,6 +234,225 @@ function buildChatCompletionsRequest(config: ClientLlmConfig): ChatCompletionsRe
 }
 
 // ---------------------------------------------------------------------------
+// Safe assistant content extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * OpenAI-compatible Chat Completions 响应中 assistant message 的结构。
+ *
+ * 不同模型/配置可能返回：
+ * - content: string
+ * - content: Array<{ type: "text"; text: string }>  (vision-capable 模型)
+ * - reasoning_content: string  (Thinking/Reasoning 模型)
+ * - refusal: string | null   (安全过滤拒答)
+ * - finish_reason: "stop" | "length" | "content_filter" | ...
+ */
+interface OpenAiChoiceMessage {
+    role?: string;
+    content?: string | Array<{ type: string; text?: string }> | null;
+    reasoning_content?: string | null;
+    refusal?: string | null;
+}
+
+interface OpenAiChoice {
+    finish_reason?: string | null;
+    message?: OpenAiChoiceMessage | null;
+}
+
+interface OpenAiChatCompletionResponse {
+    choices?: OpenAiChoice[] | null;
+}
+
+/** 内容提取结果 */
+export interface ExtractedAssistantContent {
+    /** 提取到的文本内容，空字符串表示没有有效内容 */
+    content: string;
+    /** 是否存在 reasoning_content */
+    hasReasoningContent: boolean;
+    /** 模型是否拒答 */
+    refused: boolean;
+    /** finish_reason 值 */
+    finishReason: string | null;
+    /** 诊断摘要（不含敏感信息） */
+    diagnosticSummary: string;
+}
+
+/**
+ * 从 OpenAI-compatible Chat Completions 响应中安全提取 assistant content。
+ *
+ * 支持三种 content 形态：
+ * 1. 纯字符串 → 直接返回
+ * 2. 数组 text parts → 提取拼接所有 type==="text" 的 text
+ * 3. null/空 → 返回空字符串，并记录诊断信息
+ *
+ * 不做 XML 解析。不打印 Authorization / API Key / 完整 body。
+ */
+export function extractAssistantContent(
+    data: OpenAiChatCompletionResponse,
+): ExtractedAssistantContent {
+    const choices = data.choices;
+
+    // 无 choices
+    if (!choices || choices.length === 0) {
+        return {
+            content: "",
+            hasReasoningContent: false,
+            refused: false,
+            finishReason: null,
+            diagnosticSummary: "choices 数组为空",
+        };
+    }
+
+    const choice = choices[0];
+    const message = choice?.message;
+    const finishReason = choice?.finish_reason ?? null;
+
+    // 模型拒答（安全过滤）
+    if (message?.refusal) {
+        const snippet = message.refusal.length > 200
+            ? message.refusal.substring(0, 200) + "…"
+            : message.refusal;
+        return {
+            content: "",
+            hasReasoningContent: typeof message.reasoning_content === "string" && message.reasoning_content.length > 0,
+            refused: true,
+            finishReason,
+            diagnosticSummary: `模型拒答：${snippet}`,
+        };
+    }
+
+    // 提取 reasoning_content 是否存在
+    const hasReasoningContent =
+        typeof message?.reasoning_content === "string" &&
+        message.reasoning_content.length > 0;
+
+    // 提取 content
+    const rawContent = message?.content;
+
+    // content 为 null / undefined
+    if (rawContent == null) {
+        const parts: string[] = [];
+        if (hasReasoningContent) {
+            parts.push("message.reasoning_content 存在但 message.content 为 null");
+        } else {
+            parts.push("message.content 为 null");
+        }
+        if (finishReason === "length") {
+            parts.push("finish_reason=length（输出可能被截断）");
+        }
+        return {
+            content: "",
+            hasReasoningContent,
+            refused: false,
+            finishReason,
+            diagnosticSummary: parts.join("；"),
+        };
+    }
+
+    // content 为字符串
+    if (typeof rawContent === "string") {
+        const trimmed = rawContent.trim();
+        const parts: string[] = [];
+        if (trimmed.length === 0) {
+            if (hasReasoningContent) {
+                parts.push("message.content 为空字符串但 reasoning_content 存在");
+            } else {
+                parts.push("message.content 为空字符串");
+            }
+            if (finishReason === "length") {
+                parts.push("finish_reason=length（输出可能被截断）");
+            }
+        }
+        return {
+            content: trimmed,
+            hasReasoningContent,
+            refused: false,
+            finishReason,
+            diagnosticSummary: parts.join("；"),
+        };
+    }
+
+    // content 为数组（vision-capable 模型返回格式）
+    if (Array.isArray(rawContent)) {
+        const texts = rawContent
+            .filter((part): part is { type: string; text: string } =>
+                part.type === "text" && typeof part.text === "string")
+            .map(part => part.text);
+        const merged = texts.join("").trim();
+        const otherTypes = rawContent
+            .filter(part => part.type !== "text")
+            .map(part => part.type);
+        const parts: string[] = [];
+        if (otherTypes.length > 0) {
+            parts.push(`content 数组含非 text 类型: [${otherTypes.join(", ")}]`);
+        }
+        if (merged.length === 0) {
+            if (hasReasoningContent) {
+                parts.push("text content 为空但 reasoning_content 存在");
+            }
+            if (finishReason === "length") {
+                parts.push("finish_reason=length（输出可能被截断）");
+            }
+            if (parts.length === 0) {
+                parts.push("content 数组中无 text 内容");
+            }
+        }
+        return {
+            content: merged,
+            hasReasoningContent,
+            refused: false,
+            finishReason,
+            diagnosticSummary: parts.join("；"),
+        };
+    }
+
+    // 未知 content 类型
+    return {
+        content: "",
+        hasReasoningContent,
+        refused: false,
+        finishReason,
+        diagnosticSummary: `message.content 类型异常: ${typeof rawContent}`,
+    };
+}
+
+/**
+ * 根据 extractAssistantContent 的诊断结果构建用户可读的错误消息。
+ */
+function buildContentEmptyError(
+    extracted: ExtractedAssistantContent,
+    modelName?: string,
+): ClientLlmError {
+    const modelHint = modelName ? `（当前模型: ${modelName}）` : "";
+
+    if (extracted.refused) {
+        return new ClientLlmError(
+            `模型拒绝回答${modelHint}。${extracted.diagnosticSummary}。请检查题目内容或更换模型后重试。`,
+            "AI_RESPONSE_ERROR",
+        );
+    }
+
+    if (extracted.hasReasoningContent) {
+        return new ClientLlmError(
+            `本机 LLM 没有返回最终答案内容。${modelHint}当前模型可能是 Thinking/Reasoning 模型，只返回了 reasoning_content（推理过程），没有返回最终 answer content。\n\n请换用普通对话模型（非 Thinking 版本），或在本机 LLM 设置中关闭推理模式后重试。`,
+            "AI_RESPONSE_ERROR",
+        );
+    }
+
+    if (extracted.finishReason === "length") {
+        return new ClientLlmError(
+            `本机 LLM 输出被截断${modelHint}。请降低题目长度或在本机 LLM 设置中增大 max_tokens 后重试。`,
+            "AI_RESPONSE_ERROR",
+        );
+    }
+
+    return new ClientLlmError(
+        `本机 LLM 未返回有效内容${modelHint}。${extracted.diagnosticSummary || "请检查 Model 是否正确，或换用其他模型后重试。"}`,
+        "AI_RESPONSE_ERROR",
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -300,7 +519,7 @@ export async function clientReanswerQuestion(
         );
     }
 
-    let data: { choices?: Array<{ message?: { content?: string } }> };
+    let data: OpenAiChatCompletionResponse;
     try {
         data = await response.json();
     } catch {
@@ -310,16 +529,77 @@ export async function clientReanswerQuestion(
         );
     }
 
-    const content = data.choices?.[0]?.message?.content;
-    if (!content || content.trim().length === 0) {
-        throw new ClientLlmError(
-            "AI_RESPONSE_ERROR: 本机 LLM 返回内容为空",
-            "AI_RESPONSE_ERROR",
-        );
+    // 使用安全提取函数
+    const extracted = extractAssistantContent(data);
+
+    if (extracted.refused) {
+        throw buildContentEmptyError(extracted, config.model);
+    }
+
+    // 第一次尝试：content 为空但有 reasoning_content → 自动重试
+    if (extracted.content.length === 0 && extracted.hasReasoningContent) {
+        // 构建重试 messages：追加一条 user 消息要求模型输出最终答案
+        const retryMessages = [
+            ...messages,
+            {
+                role: "user" as const,
+                content: "请直接输出最终答案和解析内容（放在 message.content 中），不要输出推理过程（reasoning_content）。严格按照 XML 标签格式输出。",
+            },
+        ];
+
+        let retryResponse: Response;
+        try {
+            retryResponse = await fetch(url, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                    model: config.model,
+                    messages: retryMessages,
+                    max_tokens: 8192,
+                }),
+                credentials: "omit",
+            });
+        } catch {
+            // 重试网络错误：直接给用户明确提示
+            throw buildContentEmptyError(extracted, config.model);
+        }
+
+        if (retryResponse.ok) {
+            let retryData: OpenAiChatCompletionResponse;
+            try {
+                retryData = await retryResponse.json();
+            } catch {
+                throw buildContentEmptyError(extracted, config.model);
+            }
+
+            const retryExtracted = extractAssistantContent(retryData);
+
+            if (retryExtracted.refused) {
+                throw buildContentEmptyError(retryExtracted, config.model);
+            }
+
+            if (retryExtracted.content.length > 0) {
+                // 重试成功，使用新 content
+                return parseReanswerXmlResponse(retryExtracted.content);
+            }
+
+            // 重试仍然无 content → 抛出原始诊断错误
+            throw buildContentEmptyError(
+                retryExtracted.hasReasoningContent ? retryExtracted : extracted,
+                config.model,
+            );
+        }
+
+        // 重试 HTTP 错误 → 抛出原始诊断
+        throw buildContentEmptyError(extracted, config.model);
+    }
+
+    if (extracted.content.length === 0) {
+        throw buildContentEmptyError(extracted, config.model);
     }
 
     // Parse the XML response using the shared parser from TASK-031B
-    return parseReanswerXmlResponse(content);
+    return parseReanswerXmlResponse(extracted.content);
 }
 
 // ---------------------------------------------------------------------------
@@ -474,7 +754,7 @@ export async function clientAnalyzeImage(
         );
     }
 
-    let data: { choices?: Array<{ message?: { content?: string } }> };
+    let data: OpenAiChatCompletionResponse;
     try {
         data = await response.json();
     } catch {
@@ -484,17 +764,19 @@ export async function clientAnalyzeImage(
         );
     }
 
-    const content = data.choices?.[0]?.message?.content;
-    if (!content || content.trim().length === 0) {
-        throw new ClientLlmError(
-            "AI_RESPONSE_ERROR: 本机 LLM 返回内容为空",
-            "AI_RESPONSE_ERROR",
-        );
+    const extracted = extractAssistantContent(data);
+
+    if (extracted.refused) {
+        throw buildContentEmptyError(extracted, config.model);
+    }
+
+    if (extracted.content.length === 0) {
+        throw buildContentEmptyError(extracted, config.model);
     }
 
     // Parse the XML response
     try {
-        return parseAnalyzeXmlResponse(content);
+        return parseAnalyzeXmlResponse(extracted.content);
     } catch (parseError: unknown) {
         const message =
             parseError instanceof Error ? parseError.message : String(parseError);
