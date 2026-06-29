@@ -13,6 +13,7 @@
 
 import { extractXmlTag, extractXmlTagRaw, parseKnowledgePoints, parseBooleanTag } from "./xml-utils";
 import { normalizeMistakeStatusForSave } from "../mistake-status";
+import { normalizeQuestionType } from "../question-type";
 import type { ParsedQuestion } from "./types";
 
 /**
@@ -51,7 +52,9 @@ export function parseAnalyzeXmlResponse(content: string): ParsedQuestion {
     const knowledgePointsRaw = extractXmlTag(content, "knowledge_points");
     const knowledgePoints = parseKnowledgePoints(knowledgePointsRaw);
 
-    // Optional fields
+    // Question type
+    const questionTypeRaw = extractXmlTag(content, "question_type");
+    const questionType = normalizeQuestionType(questionTypeRaw);
     const requiresImage = parseBooleanTag(extractXmlTagRaw(content, "requires_image"));
     const wrongAnswerText = extractXmlTag(content, "wrong_answer_text");
     const mistakeAnalysis = extractXmlTag(content, "mistake_analysis");
@@ -68,6 +71,6 @@ export function parseAnalyzeXmlResponse(content: string): ParsedQuestion {
         wrongAnswerText: wrongAnswerText || "",
         mistakeAnalysis: mistakeAnalysis || "",
         mistakeStatus,
-        questionType: "CHOICE" as const, // default, caller may override
+        questionType,
     };
 }
