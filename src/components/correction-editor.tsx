@@ -548,7 +548,11 @@ export function CorrectionEditor({ initialData, onSave, onCancel, imagePreview, 
                             <CardTitle>{t.editor.preview?.analysis || "Analysis Preview"}</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <MarkdownRenderer content={data.analysis} />
+                            {data.analysis ? (
+                                <MarkdownRenderer content={data.analysis} />
+                            ) : (
+                                <p className="text-sm text-muted-foreground italic">（快速模式，无详细解析）</p>
+                            )}
                         </CardContent>
                     </Card>
 
