@@ -28,6 +28,7 @@ YYYY-MM-DD-agent-task-name.md
 - `CHORE` chore: add safe production deploy script (TASK-037 deploy prep)
 - `9abedcb` feat: add persistent notes section to review page per error item
 - `03cc457` fix: prevent \n-to-newline replacement from corrupting LaTeX \neq in math blocks
+- `TASK-040` feat: show and filter question types in UI — error detail badge, list card badge, list type filter, detail page type editing, unit tests
 
 日志只写摘要，不粘贴完整终端输出。格式遵循 `docs/agent-logs/README.md` 模板。
 

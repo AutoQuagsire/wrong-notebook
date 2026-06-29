@@ -25,6 +25,9 @@ import { apiClient } from "@/lib/api-client";
 import { Pagination } from "@/components/ui/pagination";
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants/pagination";
 import { getMistakeStatusLabel } from "@/lib/mistake-status";
+import { QUESTION_TYPE_LABELS } from "@/lib/question-type";
+import { VALID_QUESTION_TYPES } from "@/lib/question-type";
+import type { QuestionType } from "@/lib/question-type";
 
 interface ErrorListProps {
     subjectId?: string;
@@ -46,6 +49,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
     const [gradeFilter, setGradeFilter] = useState("");
     const [chapterFilter, setChapterFilter] = useState("");
     const [paperLevelFilter, setPaperLevelFilter] = useState<"all" | "a" | "b" | "other">("all");
+    const [questionTypeFilter, setQuestionTypeFilter] = useState<string>("all");
     const [selectedTag, setSelectedTag] = useState<string | null>(null);
     const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
     // 分页状态
@@ -76,6 +80,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
         if (gradeFilter) params.append("gradeSemester", gradeFilter);
         if (chapterFilter) params.append("chapter", chapterFilter); // 章节筛选
         if (paperLevelFilter !== "all") params.append("paperLevel", paperLevelFilter);
+        if (questionTypeFilter !== "all") params.append("questionType", questionTypeFilter);
 
         router.push(`/print-preview?${params.toString()}`);
     };
@@ -167,7 +172,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
     };
 
     // 追踪筛选条件是否变化（用于判断是否需要重置页码）
-    const prevFiltersRef = useRef({ search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter });
+    const prevFiltersRef = useRef({ search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter, questionTypeFilter });
 
     useEffect(() => {
         const prevFilters = prevFiltersRef.current;
@@ -179,10 +184,11 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
             prevFilters.subjectId !== subjectId ||
             prevFilters.gradeFilter !== gradeFilter ||
             prevFilters.chapterFilter !== chapterFilter ||
-            prevFilters.paperLevelFilter !== paperLevelFilter;
+            prevFilters.paperLevelFilter !== paperLevelFilter ||
+            prevFilters.questionTypeFilter !== questionTypeFilter;
 
         // 更新 ref
-        prevFiltersRef.current = { search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter };
+        prevFiltersRef.current = { search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter, questionTypeFilter };
 
         if (filtersChanged && page !== 1) {
             // 筛选条件变化且不在第一页，重置到第一页（会再次触发此 effect）
@@ -192,7 +198,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
 
         // 正常请求数据
         fetchItems();
-    }, [page, search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter]);
+    }, [page, search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter, questionTypeFilter]);
 
     const fetchItems = async () => {
         setLoading(true);
@@ -212,6 +218,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
             if (gradeFilter) params.append("gradeSemester", gradeFilter);
             if (chapterFilter) params.append("chapter", chapterFilter); // 章节筛选
             if (paperLevelFilter !== "all") params.append("paperLevel", paperLevelFilter);
+            if (questionTypeFilter !== "all") params.append("questionType", questionTypeFilter);
             // 分页参数
             params.append("page", page.toString());
             params.append("pageSize", pageSize.toString());
@@ -326,6 +333,27 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                         {t.editor.paperLevels?.other || "Other"}
                     </Button>
                 </div>
+
+                {/* Question Type Filter */}
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                        variant={questionTypeFilter === "all" ? "secondary" : "outline"}
+                        size="sm"
+                        onClick={() => setQuestionTypeFilter("all")}
+                    >
+                        全部题型
+                    </Button>
+                    {VALID_QUESTION_TYPES.map((qt) => (
+                        <Button
+                            key={qt}
+                            variant={questionTypeFilter === qt ? "secondary" : "outline"}
+                            size="sm"
+                            onClick={() => setQuestionTypeFilter(qt)}
+                        >
+                            {QUESTION_TYPE_LABELS[qt]}
+                        </Button>
+                    ))}
+                </div>
             </div>
 
             {selectedTag && (
@@ -395,6 +423,11 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                                             <Badge variant={item.mistakeStatus === "wrong_attempt" ? "default" : "secondary"} className="text-xs">
                                                 {getMistakeStatusLabel(item.mistakeStatus, language)}
                                             </Badge>
+                                            {item.questionType && item.questionType !== "OTHER" && (
+                                                <Badge variant="outline" className="text-xs text-muted-foreground">
+                                                    {QUESTION_TYPE_LABELS[item.questionType as QuestionType] || item.questionType}
+                                                </Badge>
+                                            )}
                                         </div>
                                         <div className="flex flex-wrap gap-2 mt-3">
                                             {(expandedTags.has(item.id) ? tags : tags.slice(0, 3)).map((tag: string) => (
