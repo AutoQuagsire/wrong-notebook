@@ -146,7 +146,8 @@ export class OpenAIProvider implements AIService {
             mistakeStatus,
             subject,
             knowledgePoints,
-            requiresImage
+            requiresImage,
+            questionType: "CHOICE" as const,
         };
 
         // Final Schema Validation (just to be safe, though likely compliant by now)

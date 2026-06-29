@@ -18,6 +18,7 @@ export async function GET(req: Request) {
     const mastery = searchParams.get("mastery");
     const timeRange = searchParams.get("timeRange");
     const tag = searchParams.get("tag");
+    const questionType = searchParams.get("questionType");
 
     // 分页参数
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -131,6 +132,11 @@ export async function GET(req: Request) {
         const paperLevel = searchParams.get("paperLevel");
         if (paperLevel && paperLevel !== "all") {
             whereClause.paperLevel = paperLevel;
+        }
+
+        // Question type filter
+        if (questionType && questionType !== "all") {
+            whereClause.questionType = questionType;
         }
 
         // 将所有 AND 条件合并到 whereClause

@@ -36,5 +36,6 @@ export function normalizeReanswerToParsedQuestion(
         mistakeStatus: result.mistakeStatus,
         subject: options.subject || "其他",
         requiresImage: options.requiresImage ?? false,
+        questionType: "OTHER" as const, // reanswer doesn't provide questionType
     };
 }
