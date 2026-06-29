@@ -677,7 +677,7 @@ function buildClientAnalyzeMessages(input: {
         {
             role: "user",
             content: [
-                { type: "text", text: "请识别并解析图片中的题目。" },
+                { type: "text", text: "请快速识别图片中的题目，只写题目文本和最终答案，不要写解析步骤。" },
                 {
                     type: "image_url",
                     image_url: {
@@ -789,6 +789,31 @@ export async function clientAnalyzeImage(
     } catch (parseError: unknown) {
         const message =
             parseError instanceof Error ? parseError.message : String(parseError);
+
+        // ---- diagnostic log (safe, no API key / image data) ----
+        const isDev = typeof window !== "undefined" &&
+            window.location.hostname === "localhost";
+        if (isDev) {
+            const xmlTags = {
+                hasQuestionText: extracted.content.includes("<question_text>"),
+                hasAnswerText: extracted.content.includes("<answer_text>"),
+                hasAnalysis: extracted.content.includes("<analysis>"),
+                hasKnowledgePoints: extracted.content.includes("<knowledge_points>"),
+                hasSubject: extracted.content.includes("<subject>"),
+                hasRequiresImage: extracted.content.includes("<requires_image>"),
+                hasWrongAnswerText: extracted.content.includes("<wrong_answer_text>"),
+                hasMistakeStatus: extracted.content.includes("<mistake_status>"),
+                hasMistakeAnalysis: extracted.content.includes("<mistake_analysis>"),
+            };
+            console.warn("[diagnostic] parseAnalyzeXmlResponse failed", {
+                contentLength: extracted.content.length,
+                contentStart: extracted.content.substring(0, 300),
+                xmlTags,
+                model: config.model,
+                parseError: message,
+            });
+        }
+
         if (message.includes("AI_RESPONSE_ERROR")) {
             throw new ClientLlmError(message, "AI_RESPONSE_ERROR");
         }
