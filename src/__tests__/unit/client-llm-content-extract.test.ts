@@ -14,10 +14,22 @@
 
 import { describe, it, expect } from 'vitest';
 import { extractAssistantContent } from '@/lib/client-llm-chat';
-import type { OpenAiChatCompletionResponse } from '@/lib/client-llm-chat';
 
-// extractAssistantContent is exported; the response type is not.
-// We reconstruct it inline.
+// Reconstruct the response type locally (the interface is private in source)
+interface OpenAiChoiceMessage {
+    role?: string;
+    content?: string | Array<{ type: string; text?: string; [key: string]: unknown }> | null;
+    reasoning_content?: string | null;
+    refusal?: string | null;
+}
+interface OpenAiChoice {
+    finish_reason?: string | null;
+    message?: OpenAiChoiceMessage | null;
+}
+interface OpenAiChatCompletionResponse {
+    choices?: OpenAiChoice[] | null;
+}
+
 type TestResponse = OpenAiChatCompletionResponse;
 
 describe('extractAssistantContent', () => {
