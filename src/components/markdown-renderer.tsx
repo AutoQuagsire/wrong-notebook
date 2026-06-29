@@ -19,9 +19,32 @@ interface CodeComponentProps extends React.HTMLAttributes<HTMLElement> {
 export function MarkdownRenderer({ content, className = '' }: MarkdownRendererProps) {
     // Preprocess content to ensure proper paragraph breaks and LaTeX rendering
     // Convert single line breaks to double line breaks for better readability
-    const processedContent = normalizeMathDelimiters(content)
-        // Then, convert literal \n sequences to actual newlines (fix for AI responses)
-        .replace(/\\n/g, '\n')
+
+    // Step 0: normalize math delimiters first
+    let processedContent = normalizeMathDelimiters(content);
+
+    // Step 1: protect $...$ and $$...$$ math blocks from \n → newline replacement.
+    // Without this, LaTeX commands like \neq, \ne, \nearrow etc. get corrupted.
+    const mathBlocks: string[] = [];
+    processedContent = processedContent.replace(
+        /\$\$[\s\S]*?\$\$|\$[^$\n\r]+?\$/g,
+        (match) => {
+            mathBlocks.push(match);
+            return `\x00MATH${mathBlocks.length - 1}\x00`;
+        },
+    );
+
+    // Step 2: convert literal \n sequences to actual newlines (fix for AI responses)
+    processedContent = processedContent.replace(/\\n/g, '\n');
+
+    // Step 3: restore math blocks
+    processedContent = processedContent.replace(
+        /\x00MATH(\d+)\x00/g,
+        (_, i) => mathBlocks[parseInt(i)],
+    );
+
+    // Step 4: remaining paragraph break processing
+    processedContent = processedContent
         // Preserve existing double line breaks with a unique marker
         .replace(/\n\n/g, '\n\n###PRESERVE_BREAK###\n\n')
         // Convert patterns that should be new paragraphs
