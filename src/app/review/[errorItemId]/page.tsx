@@ -22,6 +22,7 @@ interface ReviewItem {
     wrongAnswerText?: string | null;
     mistakeAnalysis?: string | null;
     originalImageUrl?: string | null;
+    userNotes?: string | null;
     subject?: {
         id: string;
         name: string;
@@ -98,6 +99,10 @@ export default function ReviewPage() {
     const [imageProcessing, setImageProcessing] = useState(false);
     const [imageError, setImageError] = useState<string | null>(null);
 
+    const [userNotes, setUserNotes] = useState("");
+    const [notesSaving, setNotesSaving] = useState(false);
+    const [notesSaved, setNotesSaved] = useState(false);
+
     const [answerVisible, setAnswerVisible] = useState(false);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [lockedDurationSeconds, setLockedDurationSeconds] = useState<number | null>(null);
@@ -136,6 +141,7 @@ export default function ReviewPage() {
             .then(data => {
                 if (!cancelled) {
                     setItem(data);
+                    setUserNotes(data.userNotes || "");
                 }
             })
             .catch(error => {
@@ -167,6 +173,21 @@ export default function ReviewPage() {
             window.clearInterval(timer);
         };
     }, [answerVisible, item]);
+
+    const handleSaveNotes = async () => {
+        if (notesSaving || !errorItemId) return;
+        setNotesSaving(true);
+        setNotesSaved(false);
+        try {
+            await apiClient.patch(`/api/error-items/${errorItemId}/notes`, { userNotes });
+            setNotesSaved(true);
+            setTimeout(() => setNotesSaved(false), 2000);
+        } catch {
+            // 保存失败，不覆盖用户输入
+        } finally {
+            setNotesSaving(false);
+        }
+    };
 
     const handleRevealAnswer = () => {
         if (answerVisible) {
@@ -318,6 +339,42 @@ export default function ReviewPage() {
                             </div>
                         ) : null}
                         <MarkdownRenderer content={displayQuestion} />
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <span>📝</span>
+                            <span>本题笔记</span>
+                            <span className="text-xs font-normal text-muted-foreground">（持久保存，下次复习也能看到）</span>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <Textarea
+                            value={userNotes}
+                            onChange={(event) => setUserNotes(event.target.value)}
+                            placeholder="记录本题的关键思路、易错点、技巧总结、关联知识点等..."
+                            rows={4}
+                        />
+                        <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleSaveNotes}
+                                disabled={notesSaving}
+                            >
+                                {notesSaving ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : notesSaved ? (
+                                    <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
+                                ) : null}
+                                {notesSaving ? "保存中..." : notesSaved ? "已保存" : "保存笔记"}
+                            </Button>
+                            {notesSaved && (
+                                <span className="text-xs text-green-600">笔记已保存</span>
+                            )}
+                        </div>
                     </CardContent>
                 </Card>
 
