@@ -416,7 +416,7 @@ export function SettingsDialog() {
                 : '';
             const errMsg = error instanceof Error ? error.message : String(error);
             frontendLogger.error('[SettingsDialog]', 'Import failed', { error: errMsg });
-            const msg = (t.settings?.importFailed || "Import failed") + (detail ? ': ' + detail : '');
+            const msg = (t.settings?.importFailed || "Import failed");
             alert(msg);
         } finally {
             setImporting(false);
@@ -462,7 +462,7 @@ export function SettingsDialog() {
                 : '';
             const errMsg = error instanceof Error ? error.message : String(error);
             frontendLogger.error('[SettingsDialog]', 'Import all failed', { error: errMsg });
-            const msg = (t.settings?.importFailed || "Import failed") + (detail ? ': ' + detail : '');
+            const msg = (t.settings?.importFailed || "Import failed");
             alert(msg);
         } finally {
             setImporting(false);

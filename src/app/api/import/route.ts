@@ -395,7 +395,9 @@ export async function POST(req: Request) {
             stats,
         });
     } catch (error) {
-        logger.error({ error, userId: user.id }, 'Import failed');
-        return internalError("Failed to import data");
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const prismaErr = (error as { code?: string; meta?: unknown })?.code;
+        logger.error({ error, userId: user.id, prismaCode: prismaErr, message: errMsg }, 'Import failed');
+        return internalError("Failed to import data: " + errMsg);
     }
 }
