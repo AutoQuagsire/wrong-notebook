@@ -167,3 +167,55 @@
     background-color: #f5f5f5 !important;
   }
 }
+
+/* === 复习页原题内容：桌面端阅读优化 === */
+@layer components {
+.review-question-content .markdown-content {
+  font-size: 16px !important;
+  line-height: 1.75 !important;
+}
+
+.review-question-content .markdown-content p {
+  margin-bottom: 0.9rem !important;
+}
+
+.review-question-content .markdown-content li {
+  margin-top: 0.45rem !important;
+  margin-bottom: 0.45rem !important;
+}
+
+@media (min-width: 768px) {
+  .review-question-content .markdown-content {
+    font-size: 20px !important;
+    line-height: 1.9 !important;
+  }
+
+  .review-question-content .markdown-content p {
+    margin-bottom: 1.1rem !important;
+  }
+
+  .review-question-content .markdown-content li {
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .review-question-content .katex {
+    font-size: 1.16em !important;
+  }
+
+  .review-question-content .katex-display {
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .review-question-content .markdown-content {
+    font-size: 21px !important;
+  }
+
+  .review-question-content .katex {
+    font-size: 1.18em !important;
+  }
+}
+}

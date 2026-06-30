@@ -343,7 +343,9 @@ export default function ReviewPage() {
                                 )}
                             </div>
                         ) : null}
+                        <div className="review-question-content">
                         <MarkdownRenderer content={displayQuestion} />
+                        </div>
                     </CardContent>
                 </Card>
 
