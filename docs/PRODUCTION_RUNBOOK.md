@@ -10,6 +10,25 @@
 - Backup script: `/opt/wrong-notebook/backup.sh`
 - Restore guide on server: `/opt/wrong-notebook/RESTORE.md`
 - Nginx config: `/etc/nginx/sites-available/wrong-notebook`
+- **Next.js mode**: `output: 'standalone'` — `next start` is **not supported**. Must use `node .next/standalone/server.js`.
+
+## Production DATABASE_URL
+
+**Must be absolute path.** Relative paths break under standalone mode because the Node process chdirs to `.next/standalone/`.
+
+```
+DATABASE_URL="file:/var/www/wrong-notebook/prisma/production.db"
+```
+
+This must be set in:
+1. Root `.env` (used by build)
+2. `.next/standalone/.env` (consumed by standalone server at runtime — build writes a stale copy, must be patched after every build)
+3. PM2 process env (`pm2 env <id>`)
+
+**Forbidden** values:
+- `file:./production.db`
+- `file:./prisma/production.db`
+- Any relative `file:` path
 
 ## Production Version
 
@@ -53,11 +72,38 @@ git pull --ff-only origin main
 npx prisma generate
 rm -rf .next
 
-export NODE_OPTIONS="--max-old-space-size=1024"
+export NODE_ENV=production
+export DATABASE_URL="file:/var/www/wrong-notebook/prisma/production.db"
+export NODE_OPTIONS="--max-old-space-size=768"
 export NEXT_TELEMETRY_DISABLED=1
 npx next build --webpack
 
-pm2 restart wrong-notebook
+# CRITICAL: standalone .env inherits DATABASE_URL from build-time env;
+# verify and force-rewrite if build didn't pick up the absolute path
+if [ -f .next/standalone/.env ]; then
+    sed -i 's|^DATABASE_URL=.*|DATABASE_URL="file:/var/www/wrong-notebook/prisma/production.db"|' .next/standalone/.env
+fi
+grep '^DATABASE_URL=' .next/standalone/.env
+
+# CRITICAL: standalone does NOT auto-copy .next/static or public.
+# Missing static assets cause ChunkLoadError / _next/static 404 / KaTeX font 404.
+mkdir -p .next/standalone/.next
+rm -rf .next/standalone/.next/static
+cp -a .next/static .next/standalone/.next/static
+
+rm -rf .next/standalone/public
+if [ -d public ]; then
+    cp -a public .next/standalone/public
+fi
+
+# Start with standalone server, NOT next start
+DATABASE_URL="file:/var/www/wrong-notebook/prisma/production.db" \
+NODE_ENV=production \
+PORT=3000 \
+HOSTNAME=127.0.0.1 \
+pm2 restart wrong-notebook --update-env
+
+pm2 save
 pm2 status
 
 curl -I http://127.0.0.1:3000
@@ -66,6 +112,9 @@ curl -I http://8.148.71.66
 
 **Important**: Always use `npx next build --webpack` on the 2GB VPS.
 Never use Turbopack build (default `npm run build`) on the server.
+**Never use `next start`** — this project is `output: 'standalone'`.
+Always verify `DATABASE_URL` is absolute after build.
+Always verify `.next/standalone/.next/static` exists after build (missing → ChunkLoadError).
 
 ## Deploy With Prisma Migration
 
@@ -79,8 +128,31 @@ git pull --ff-only origin main
 npm ci
 npx prisma generate
 npx prisma migrate deploy
+
+export NODE_ENV=production
+export DATABASE_URL="file:/var/www/wrong-notebook/prisma/production.db"
+export NODE_OPTIONS="--max-old-space-size=768"
 npx next build --webpack
-pm2 restart wrong-notebook
+
+# Fix standalone .env DATABASE_URL
+if [ -f .next/standalone/.env ]; then
+    sed -i 's|^DATABASE_URL=.*|DATABASE_URL="file:/var/www/wrong-notebook/prisma/production.db"|' .next/standalone/.env
+fi
+
+# Fix standalone static assets
+mkdir -p .next/standalone/.next
+rm -rf .next/standalone/.next/static
+cp -a .next/static .next/standalone/.next/static
+rm -rf .next/standalone/public
+[ -d public ] && cp -a public .next/standalone/public
+
+DATABASE_URL="file:/var/www/wrong-notebook/prisma/production.db" \
+NODE_ENV=production \
+PORT=3000 \
+HOSTNAME=127.0.0.1 \
+pm2 restart wrong-notebook --update-env
+
+pm2 save
 ```
 
 **Never** run `npx prisma migrate reset` in production.
@@ -122,3 +194,7 @@ tail -n 80 /var/log/nginx/error.log
 - Never run destructive Prisma commands in production.
 - Always back up before deployment.
 - Use webpack build on the 2GB VPS, not Turbopack.
+- **Never use `next start`** — this is `output: 'standalone'`. Use `node .next/standalone/server.js`.
+- **DATABASE_URL must be absolute** (`file:/var/www/wrong-notebook/prisma/production.db`). Relative paths break standalone.
+- **After every build, verify** `.next/standalone/.env` has the correct absolute DATABASE_URL.
+- If `/var/www/wrong-notebook/production.db` exists as an empty/stale file, it was created by misconfigured relative path. Do not delete it without confirming the real DB is in use and backing up first.

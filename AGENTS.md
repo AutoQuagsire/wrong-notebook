@@ -131,6 +131,47 @@
 | 部署脚本 | `/opt/wrong-notebook/deploy.sh` |
 | 备份脚本 | `/opt/wrong-notebook/backup.sh` |
 | 恢复指南 | `/opt/wrong-notebook/RESTORE.md` |
+| Next.js 模式 | `output: 'standalone'`（`next start` 无效）|
+
+### 🔴 Standalone + SQLite 硬性规则（Agent 必须遵守）
+
+本项目 `next.config.ts` 配置 `output: 'standalone'`。standalone server 启动后 chdir 到 `.next/standalone/`，相对 SQLite 路径会解析到错误位置，导致 `Error code 14: Unable to open the database file` 或 `no such table: User`。
+
+**绝对禁止：**
+- `next start` / `npm run start` / `pm2 start npm -- run start`
+- 生产 `DATABASE_URL` 使用相对路径 `file:./production.db` 或 `file:./prisma/production.db`
+- 删除 `/var/www/wrong-notebook/production.db` 空库不做备份确认
+
+**必须使用：**
+- PM2 启动命令：`node .next/standalone/server.js`（不是 `next start`）
+- PM2 `--cwd`：`/var/www/wrong-notebook`
+- 生产 DATABASE_URL 绝对路径：
+  ```
+  DATABASE_URL="file:/var/www/wrong-notebook/prisma/production.db"
+  ```
+- 真实数据库路径：`/var/www/wrong-notebook/prisma/production.db`
+- **构建后必须复制静态资源到 standalone**：
+  ```bash
+  mkdir -p .next/standalone/.next
+  rm -rf .next/standalone/.next/static
+  cp -a .next/static .next/standalone/.next/static
+  rm -rf .next/standalone/public
+  [ -d public ] && cp -a public .next/standalone/public
+  ```
+  不复制会导致 ChunkLoadError / _next/static 404 / KaTeX 字体 404 / client-side exception。
+
+**ChunkLoadError / _next/static 404 排查：**
+1. `ls .next/standalone/.next/static` — 是否存在
+2. 不存在则复制 `.next/static` 和 `public` 到 standalone
+3. `pm2 restart wrong-notebook --update-env`
+4. 浏览器硬刷新（Ctrl+Shift+R）
+
+**登录/注册同时失败时优先检查：**
+1. PM2 env: `pm2 env <id> | grep DATABASE_URL`
+2. root .env: `grep DATABASE_URL .env`
+3. standalone .env: `grep DATABASE_URL .next/standalone/.env`
+4. PM2 cwd: `pm2 describe wrong-notebook | grep 'exec cwd'`
+5. 日志错误码: `pm2 logs wrong-notebook --lines 50 | grep -E 'Error code 14|no such table'`
 
 ### 🔴 低内存 VPS 构建硬性规则（Agent 必须遵守）
 
