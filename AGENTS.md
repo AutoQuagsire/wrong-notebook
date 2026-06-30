@@ -117,14 +117,74 @@
 
 本项目已有真实生产部署。
 
-### 生产服务器
+### 生产服务器配置
 
-- 公网入口: `http://8.148.71.66`
-- 服务器项目路径: `/var/www/wrong-notebook`
-- PM2 应用名: `wrong-notebook`
-- 生产数据库: `/var/www/wrong-notebook/prisma/production.db`
-- 备份脚本: `/opt/wrong-notebook/backup.sh`
-- 恢复指南(服务器): `/opt/wrong-notebook/RESTORE.md`
+| 资源 | 规格 |
+|------|------|
+| vCPU | 2 |
+| RAM | 2 GiB |
+| Swap | 2 GiB |
+| 公网入口 | `http://8.148.71.66` |
+| 项目路径 | `/var/www/wrong-notebook` |
+| PM2 应用名 | `wrong-notebook` |
+| 生产数据库 | `/var/www/wrong-notebook/prisma/production.db` |
+| 部署脚本 | `/opt/wrong-notebook/deploy.sh` |
+| 备份脚本 | `/opt/wrong-notebook/backup.sh` |
+| 恢复指南 | `/opt/wrong-notebook/RESTORE.md` |
+
+### 🔴 低内存 VPS 构建硬性规则（Agent 必须遵守）
+
+Next.js 16 默认使用 Turbopack 构建，在 2GB VPS 上内存占用极高，可导致服务器卡死。因此：
+
+**绝对禁止 Agent 在服务器上执行以下命令：**
+
+- `npm run build`
+- `next build`
+- `npx next build`
+- 任何未显式带 `--webpack` 的构建命令
+- 任何前台直接执行超过 60 秒的长构建命令
+
+**生产构建唯一允许的命令：**
+
+```bash
+export NODE_OPTIONS="--max-old-space-size=768"
+npx next build --webpack
+```
+
+**构建必须通过以下方式之一后台执行：**
+
+1. 推荐：`tmux` 会话内执行 `/opt/wrong-notebook/deploy.sh`
+2. 可接受：`nohup /opt/wrong-notebook/deploy.sh > /var/www/deploy.log 2>&1 &`
+3. 禁止：SSH 前台裸跑 build，Agent 不得自动这样做
+
+**Agent 调用优先级：**
+
+- 始终优先调用固定部署脚本 `/opt/wrong-notebook/deploy.sh`
+- Agent 不得绕过该脚本手写构建命令，除非用户明确要求
+- 构建日志写入 `/var/www/deploy.log`
+
+### 🛠 服务器卡死恢复流程
+
+如果构建期间服务器卡死或无法 SSH：
+
+1. 通过 VPS 控制台重启服务器
+2. SSH 后清理残留进程：`pkill -f "next build" || true`
+3. 停止 PM2：`pm2 stop wrong-notebook`
+4. 删除失败残留：`rm -rf /var/www/wrong-notebook/.next`
+5. 释放内存后重新构建：
+   ```bash
+   cd /var/www/wrong-notebook
+   export NODE_OPTIONS="--max-old-space-size=768"
+   tmux new -s build
+   npx next build --webpack
+   # Ctrl+B D 分离
+   ```
+6. 构建成功后再重启 PM2：
+   ```bash
+   pm2 restart wrong-notebook
+   pm2 status
+   curl -I http://127.0.0.1:3000
+   ```
 
 ### 核心规则
 
@@ -157,33 +217,18 @@
 
 ### 标准生产部署流程
 
-在服务器执行：
+**唯一入口**：`/opt/wrong-notebook/deploy.sh`（见 `scripts/deploy.sh`）。该脚本自动完成 git pull → npm ci → 备份旧 .next → pm2 stop → webpack 构建（768MB 堆限制）→ pm2 start → 健康检查 → 失败自动回退。
 
-```bash
-cd /var/www/wrong-notebook
-git status --short
-git fetch --all --tags
-git pull --ff-only origin main
+Agent 始终优先使用此脚本，不要手写 build 命令。
 
-npx prisma generate
-rm -rf .next
-
-export NODE_OPTIONS="--max-old-space-size=1024"
-export NEXT_TELEMETRY_DISABLED=1
-npx next build --webpack
-
-pm2 restart wrong-notebook
-pm2 status
-
-curl -I http://127.0.0.1:3000
-curl -I http://8.148.71.66
-```
+前台（调试）：`/opt/wrong-notebook/deploy.sh`
+生产：`nohup nice -n 10 ionice -c2 -n7 /opt/wrong-notebook/deploy.sh > /var/www/deploy.log 2>&1 &`
+查看进度：`tail -f /var/www/deploy.log`
 
 重要：
-
 - 在 2GB VPS 上必须使用 `npx next build --webpack`。
 - 不要在服务器上执行默认 Turbopack build，除非明确批准。
-- 如果 `package-lock.json` 有变动，先 `npm ci` 再 build。
+- 如果 `package-lock.json` 有变动，脚本自动 `npm ci`。
 
 ### Prisma Schema 变更时的部署
 
@@ -198,6 +243,7 @@ git pull --ff-only origin main
 npm ci
 npx prisma generate
 npx prisma migrate deploy
+export NODE_OPTIONS="--max-old-space-size=768"
 npx next build --webpack
 pm2 restart wrong-notebook
 ```
@@ -208,6 +254,7 @@ pm2 restart wrong-notebook
 
 ```bash
 git pull --ff-only origin main
+export NODE_OPTIONS="--max-old-space-size=768"
 npx next build --webpack
 pm2 restart wrong-notebook
 ```

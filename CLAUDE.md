@@ -47,3 +47,10 @@ YYYY-MM-DD-agent-task-name.md
 - 不直接操作生产服务器 `/var/www/wrong-notebook`，除非任务明确要求。
 - 不在生产环境执行 `npx prisma migrate reset`。
 - 不用本地 `prisma/dev.db` 覆盖生产 `production.db`。
+
+## 生产构建约束
+
+- 生产服务器为 2C2G VPS，Next.js 16 默认 Turbopack 构建会占满内存导致卡死。
+- 任何生产构建必须使用 `npx next build --webpack` + `NODE_OPTIONS="--max-old-space-size=768"`。
+- 构建必须后台执行（tmux 或 nohup），禁止前台裸跑。
+- Agent 始终优先调用 `/opt/wrong-notebook/deploy.sh`，禁止绕过脚本手写 build 命令。
