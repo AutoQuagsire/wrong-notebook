@@ -87,8 +87,13 @@ describe('normalizeMathDelimiters', () => {
         });
 
         it('应处理空值', () => {
-            expect(normalizeMathDelimiters(null as unknown as string)).toBe(null);
-            expect(normalizeMathDelimiters(undefined as unknown as string)).toBe(undefined);
+            expect(normalizeMathDelimiters(null as unknown as string)).toBe("");
+            expect(normalizeMathDelimiters(undefined as unknown as string)).toBe("");
+        });
+
+        it('应处理非字符串输入', () => {
+            expect(normalizeMathDelimiters(123 as unknown as string)).toBe("123");
+            expect(normalizeMathDelimiters({} as unknown as string)).toBe("[object Object]");
         });
 
         it('应处理不含任何公式的纯文本', () => {
@@ -137,3 +142,37 @@ describe('MarkdownRenderer math integration', () => {
         expect(output).toContain('$$');
     });
 });
+
+describe('MarkdownRenderer null safety', () => {
+    // These tests verify that normalizeMathDelimiters (the preprocessor used by MarkdownRenderer)
+    // handles null/undefined/non-string inputs safely, preventing the "client-side exception"
+    // caused by TypeError when calling .replace() on null/undefined.
+
+    it('normalizeMathDelimiters(null) 返回 "" 而不是 null', () => {
+        expect(normalizeMathDelimiters(null as unknown as string)).toBe("");
+    });
+
+    it('normalizeMathDelimiters(undefined) 返回 "" 而不是 undefined', () => {
+        expect(normalizeMathDelimiters(undefined as unknown as string)).toBe("");
+    });
+
+    it('normalizeMathDelimiters("") 返回 ""', () => {
+        expect(normalizeMathDelimiters("")).toBe("");
+    });
+
+    it('normalizeMathDelimiters 返回结果始终是 string 类型，可以安全调用 .replace()', () => {
+        const inputs: (string | null | undefined)[] = [
+            null,
+            undefined,
+            "",
+            "\\(x+1\\)",
+        ];
+        for (const input of inputs) {
+            const result = normalizeMathDelimiters(input);
+            expect(typeof result).toBe("string");
+            // Must not throw: .replace() on the result
+            expect(() => result.replace(/a/g, "b")).not.toThrow();
+        }
+    });
+});
+

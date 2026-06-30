@@ -76,11 +76,14 @@ export function cleanMarkdown(content: string): string {
  * Skips content inside code blocks (``` ... ```) and inline code (` ... `).
  * Does not double-convert already-correct $...$ and $$...$$.
  *
- * @param input - Raw text potentially containing LaTeX delimiters
- * @returns Text with normalized delimiters
+ * @param input - Raw text potentially containing LaTeX delimiters (null/undefined safe)
+ * @returns Text with normalized delimiters, never null
  */
-export function normalizeMathDelimiters(input: string): string {
-    if (!input) return input;
+export function normalizeMathDelimiters(input?: string | null): string {
+    // Defensive: normalize to string, never return null/undefined
+    if (input == null) return "";
+    if (typeof input !== "string") return String(input);
+    if (input === "") return "";
 
     // Protect code blocks first — split by fenced code blocks
     const fenceRegex = /(`{3,})[\s\S]*?\1/g;

@@ -7,7 +7,7 @@ import { normalizeMathDelimiters } from '@/lib/markdown-utils';
 import 'katex/dist/katex.min.css';
 
 interface MarkdownRendererProps {
-    content: string;
+    content?: string | null;
     className?: string;
 }
 
@@ -20,8 +20,12 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
     // Preprocess content to ensure proper paragraph breaks and LaTeX rendering
     // Convert single line breaks to double line breaks for better readability
 
+    // Defensive: normalize content to a safe string before any string operations.
+    // Never trust that callers have done their own fallback.
+    const safeContent = content == null ? "" : typeof content === "string" ? content : String(content);
+
     // Step 0: normalize math delimiters first
-    let processedContent = normalizeMathDelimiters(content);
+    let processedContent: string = normalizeMathDelimiters(safeContent);
 
     // Step 1: protect $...$ and $$...$$ math blocks from \n → newline replacement.
     // Without this, LaTeX commands like \neq, \ne, \nearrow etc. get corrupted.
