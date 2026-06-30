@@ -411,8 +411,13 @@ export function SettingsDialog() {
             setSelectedFileName("");
             window.location.reload();
         } catch (error) {
-            frontendLogger.error('[SettingsDialog]', 'Import failed', { error: error instanceof Error ? error.message : String(error) });
-            alert(t.settings?.importFailed || "Import failed");
+            const detail = error instanceof Error && error.message !== `API Error: 400 Bad Request`
+                ? error.message
+                : '';
+            const errMsg = error instanceof Error ? error.message : String(error);
+            frontendLogger.error('[SettingsDialog]', 'Import failed', { error: errMsg });
+            const msg = (t.settings?.importFailed || "Import failed") + (detail ? ': ' + detail : '');
+            alert(msg);
         } finally {
             setImporting(false);
         }
@@ -452,8 +457,13 @@ export function SettingsDialog() {
                 throw new Error(result.message || "Import failed");
             }
         } catch (error) {
-            frontendLogger.error('[SettingsDialog]', 'Import all failed', { error: error instanceof Error ? error.message : String(error) });
-            alert(t.settings?.importFailed || "Import failed");
+            const detail = error instanceof Error && error.message !== `API Error: 400 Bad Request`
+                ? error.message
+                : '';
+            const errMsg = error instanceof Error ? error.message : String(error);
+            frontendLogger.error('[SettingsDialog]', 'Import all failed', { error: errMsg });
+            const msg = (t.settings?.importFailed || "Import failed") + (detail ? ': ' + detail : '');
+            alert(msg);
         } finally {
             setImporting(false);
         }
