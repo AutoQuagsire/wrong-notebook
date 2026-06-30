@@ -2,7 +2,7 @@
  * Import/Export round-trip 测试 — PracticeRecord 新字段
  * 验证 errorItemId、practiceType、rating 等字段在导入导出的完整往返中不丢失
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 type PrismaMockArgs = { data: Record<string, unknown>; where?: Record<string, unknown> };
 
@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
     },
     mockPrismaSubject: {
         findMany: vi.fn(),
+        findFirst: vi.fn(),
+        create: vi.fn(),
     },
     mockPrismaUser: {
         findUnique: vi.fn(),
@@ -46,6 +48,8 @@ const mocks = vi.hoisted(() => ({
     },
     mockPrismaReviewSchedule: {
         findMany: vi.fn(),
+        findFirst: vi.fn(),
+        create: vi.fn(),
     },
 }));
 
@@ -446,6 +450,174 @@ describe('Import/Export round-trip — PracticeRecord 新字段', () => {
                     }),
                 })
             );
+        });
+    });
+
+    describe('Normal user import with different source userId', () => {
+        const differentUserPayload = {
+            version: 1,
+            exportedAt: '2025-06-15T10:30:00Z',
+            user: {
+                id: 'user-source',
+                email: 'source@example.com',
+                name: 'Source User',
+                educationStage: 'junior_high',
+                enrollmentYear: 2024,
+                role: 'user',
+            },
+            subjects: [
+                {
+                    id: 'subj-old-1',
+                    name: '数学',
+                    userId: 'user-source',
+                    createdAt: '2025-06-15T10:00:00Z',
+                    updatedAt: '2025-06-15T10:00:00Z',
+                },
+            ],
+            customTags: [],
+            errorItems: [
+                {
+                    id: 'err-old-1',
+                    userId: 'user-source',
+                    subjectId: 'subj-old-1',
+                    originalImageUrl: 'data:image/png;base64,test',
+                    ocrText: null,
+                    questionText: 'test question from another user',
+                    answerText: 'test answer',
+                    analysis: 'test analysis',
+                    wrongAnswerText: null,
+                    mistakeAnalysis: null,
+                    mistakeStatus: null,
+                    knowledgePoints: '[]',
+                    source: null,
+                    errorType: null,
+                    userNotes: null,
+                    masteryLevel: 0,
+                    gradeSemester: null,
+                    paperLevel: null,
+                    createdAt: '2025-06-15T10:00:00Z',
+                    updatedAt: '2025-06-15T10:00:00Z',
+                    tags: [],
+                },
+            ],
+            reviewSchedules: [],
+            practiceRecords: [],
+        };
+
+        beforeEach(() => {
+            vi.clearAllMocks();
+            mocks.mockPrismaUser.findUnique.mockResolvedValue(mocks.mockUser); // session user is user-roundtrip
+            mocks.mockPrismaSubject.findMany.mockResolvedValue([]);
+            mocks.mockPrismaKnowledgeTag.findMany.mockResolvedValue([]);
+            mocks.mockPrismaErrorItem.findMany.mockResolvedValue([]);
+            mocks.mockPrismaReviewSchedule.findMany.mockResolvedValue([]);
+            mocks.mockPrismaKnowledgeTag.findFirst.mockResolvedValue(null);
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue(null);
+            mocks.mockPrismaSubject.findFirst = vi.fn().mockResolvedValue(null);
+            mocks.mockPrismaErrorItem.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'created-err-' + Date.now(),
+                ...args.data,
+            }));
+            mocks.mockPrismaErrorItem.update.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: args.where!.id,
+                ...args.data,
+            }));
+            mocks.mockPrismaSubject.create = vi.fn().mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'created-subj-' + Date.now(),
+                ...args.data,
+            }));
+            mocks.mockPrismaReviewSchedule.findFirst = vi.fn().mockResolvedValue(null);
+            mocks.mockPrismaReviewSchedule.create = vi.fn().mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'created-sched-' + Date.now(),
+                ...args.data,
+            }));
+            mocks.mockPrismaPracticeRecord.create = vi.fn().mockImplementation(async (args: PrismaMockArgs) => ({
+                id: 'created-rec-' + Date.now(),
+                ...args.data,
+            }));
+        });
+
+        afterEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('should accept import from a different source user and assign data to current user', async () => {
+            const request = new Request('http://localhost/api/import', {
+                method: 'POST',
+                body: JSON.stringify(differentUserPayload),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await IMPORT_POST(request);
+            const result = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(result.success).toBe(true);
+
+            // The subject should be created with current user ID, not source user ID
+            const subjectCreateCalls = mocks.mockPrismaSubject.create.mock?.calls || [];
+            if (subjectCreateCalls.length > 0) {
+                const subjectData = (subjectCreateCalls[0][0] as PrismaMockArgs).data;
+                expect(subjectData.userId).toBe('user-roundtrip'); // current session user
+                expect(subjectData.userId).not.toBe('user-source');
+            }
+
+            // Error item should be created with current user ID
+            expect(mocks.mockPrismaErrorItem.create).toHaveBeenCalled();
+            const errorItemCall = (mocks.mockPrismaErrorItem.create.mock.calls[0][0] as PrismaMockArgs).data;
+            expect(errorItemCall.userId).toBe('user-roundtrip');
+            expect(errorItemCall.userId).not.toBe('user-source');
+        });
+
+        it('should default questionType to OTHER when missing in import data', async () => {
+            const noTypePayload = {
+                ...differentUserPayload,
+                errorItems: [
+                    {
+                        ...differentUserPayload.errorItems[0],
+                        // no questionType field
+                    },
+                ],
+            };
+
+            const request = new Request('http://localhost/api/import', {
+                method: 'POST',
+                body: JSON.stringify(noTypePayload),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await IMPORT_POST(request);
+            const result = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(result.success).toBe(true);
+            expect(mocks.mockPrismaErrorItem.create).toHaveBeenCalled();
+            const createData = (mocks.mockPrismaErrorItem.create.mock.calls[0][0] as PrismaMockArgs).data;
+            expect(createData.questionType).toBe('OTHER');
+        });
+
+        it('should still reject import with missing version', async () => {
+            const invalidPayload = { user: { email: 'x@x.com' }, errorItems: [] };
+
+            const request = new Request('http://localhost/api/import', {
+                method: 'POST',
+                body: JSON.stringify(invalidPayload),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await IMPORT_POST(request);
+            expect(response.status).toBe(400);
+        });
+
+        it('normal user should not bypass importAll mode', async () => {
+            const request = new Request('http://localhost/api/import?all=true', {
+                method: 'POST',
+                body: JSON.stringify(differentUserPayload),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await IMPORT_POST(request);
+            expect(response.status).toBe(403);
         });
     });
 });

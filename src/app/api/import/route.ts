@@ -135,13 +135,12 @@ export async function POST(req: Request) {
 
         // 验证数据格式
         if (!body.version || !body.user || !Array.isArray(body.errorItems)) {
-            return badRequest("Invalid import data format");
+            return badRequest("Invalid import data format: missing version, user, or errorItems");
         }
 
-        // 非管理员模式：验证导出数据属于当前用户
-        if (!importAll && body.user.email !== user.email) {
-            return badRequest("Import data does not belong to current user");
-        }
+        // 普通用户导入：允许导入来自任意来源的个人导出数据，
+        // 但所有写入强制执行"归属当前用户"（见下方 targetUserId）。
+        // 只有 importAll 模式可使用原始 userId。
 
         const stats = {
             subjectsCreated: 0,
