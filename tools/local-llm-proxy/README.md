@@ -26,7 +26,11 @@
 
 ## 启动步骤
 
-### 1. 复制并编辑配置文件
+### 方法一：Windows 双击启动（推荐）
+
+双击 `start.bat`，首次会提示编辑 `.env`（仅需确认 PORT 和 ALLOWED_ORIGINS，API Key 在网页里填），然后自动安装依赖并启动。
+
+### 方法二：命令行启动
 
 ```bash
 cd tools/local-llm-proxy
@@ -59,6 +63,13 @@ MAX_BODY_BYTES=15728640
 > ALLOWED_ORIGINS=http://localhost:3000,http://8.148.71.66
 > ```
 > 修改 .env 后必须重启代理。
+
+### 1. 复制并编辑配置文件
+
+```bash
+cd tools/local-llm-proxy
+cp .env.example .env
+```
 
 ### 2. 启动代理
 

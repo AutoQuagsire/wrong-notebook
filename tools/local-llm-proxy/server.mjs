@@ -12,7 +12,7 @@
  *
  * 本代理不保存任何 API Key。只做 CORS 转发。
  *
- * 使用: cp .env.example .env → 编辑 .env → npm start
+ * 使用: cp .env.example .env → npm start (Windows: 双击 start.bat)
  */
 
 import { createServer } from "node:http";
@@ -33,6 +33,14 @@ const ALLOWED_ORIGINS = originsRaw
 
 // 检测 .env 是否被加载：如果没有环境变量传入，说明用户可能直接运行了 node server.mjs
 const envLoaded = !!(process.env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGIN);
+
+// 获取 HOST（必须为 127.0.0.1，禁止 0.0.0.0）
+const HOST = (process.env.HOST || "127.0.0.1").trim();
+if (HOST !== "127.0.0.1") {
+    console.error("[proxy] 安全错误：HOST 只能设置为 127.0.0.1，不能是 " + HOST);
+    console.error("[proxy] 代理不会暴露到局域网或公网。");
+    process.exit(1);
+}
 
 // ---------------------------------------------------------------------------
 // 安全常量
@@ -110,7 +118,7 @@ var server = createServer(async function (req, res) {
         }));
         res.end(JSON.stringify({
             ok: true,
-            service: "local-llm-proxy",
+            service: "wrong-notebook-local-llm-proxy",
             allowedOrigins: ALLOWED_ORIGINS.slice(),
             maxBodyBytes: MAX_BODY_BYTES,
             pna: true,
@@ -213,10 +221,10 @@ var server = createServer(async function (req, res) {
 // Start
 // ---------------------------------------------------------------------------
 
-server.listen(PORT, "127.0.0.1", function () {
+server.listen(PORT, HOST, function () {
     console.log("[proxy] 本机 LLM 代理已启动");
-    console.log("[proxy] 监听: http://127.0.0.1:" + PORT + VALID_PATH);
-    console.log("[proxy] 健康检查: http://127.0.0.1:" + PORT + "/health");
+    console.log("[proxy] 监听: http://" + HOST + ":" + PORT + VALID_PATH);
+    console.log("[proxy] 健康检查: http://" + HOST + ":" + PORT + "/health");
 
     if (!envLoaded) {
         console.log("[proxy] ╔══════════════════════════════════════════════════════╗");
@@ -233,4 +241,5 @@ server.listen(PORT, "127.0.0.1", function () {
     console.log("[proxy] Private Network Access: enabled");
     console.log("[proxy] 最大请求体: " + (MAX_BODY_BYTES / 1024 / 1024).toFixed(0) + " MB");
     console.log("[proxy] 按 Ctrl+C 停止");
+    console.log("[proxy] 本代理只监听 127.0.0.1，不会暴露到局域网或公网。");
 });
