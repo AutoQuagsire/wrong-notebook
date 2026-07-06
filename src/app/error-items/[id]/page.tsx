@@ -22,6 +22,20 @@ import { GeogebraDemo } from "@/components/geogebra-demo";
 import { QUESTION_TYPE_LABELS, VALID_QUESTION_TYPES } from "@/lib/question-type";
 import type { QuestionType } from "@/lib/question-type";
 
+function getErrorMessage(error: unknown): string {
+    if (error && typeof error === "object") {
+        const e = error as Record<string, unknown>;
+        if (typeof e.data === "object" && e.data !== null) {
+            const d = e.data as Record<string, unknown>;
+            if (typeof d.message === "string") return d.message;
+        }
+        if (typeof e.message === "string") return e.message;
+        if (typeof e.status === "number") return `HTTP ${e.status}`;
+        if (typeof e.statusText === "string") return e.statusText;
+    }
+    return "未知错误";
+}
+
 interface KnowledgeTag {
     id: string;
     name: string;
@@ -399,7 +413,8 @@ export default function ErrorDetailPage() {
             alert(t.common?.messages?.noteSaveSuccess || 'Notes saved successfully');
         } catch (error) {
             console.error(error);
-            alert(t.common?.messages?.saveFailed || 'Save failed');
+            const reason = getErrorMessage(error);
+            alert((t.common?.messages?.saveFailed || 'Save failed') + ': ' + reason);
         }
     };
 

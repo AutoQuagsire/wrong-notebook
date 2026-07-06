@@ -582,13 +582,13 @@ describe('/api/error-items', () => {
 
     describe('PATCH /api/error-items/[id]/notes (更新笔记)', () => {
         it('应该成功更新用户笔记', async () => {
-            const existingItem = {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
-                userNotes: '',
-            };
+            });
             mocks.mockPrismaErrorItem.update.mockResolvedValue({
-                ...existingItem,
+                id: 'error-item-1',
+                userId: 'user-123',
                 userNotes: '这道题需要注意移项变号',
             });
 
@@ -606,13 +606,13 @@ describe('/api/error-items', () => {
         });
 
         it('应该成功清空笔记', async () => {
-            const existingItem = {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
-                userNotes: '旧笔记内容',
-            };
+            });
             mocks.mockPrismaErrorItem.update.mockResolvedValue({
-                ...existingItem,
+                id: 'error-item-1',
+                userId: 'user-123',
                 userNotes: '',
             });
 
@@ -631,6 +631,10 @@ describe('/api/error-items', () => {
 
         it('应该成功保存长笔记', async () => {
             const longNote = '这是一段很长的笔记内容。'.repeat(100);
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+            });
             mocks.mockPrismaErrorItem.update.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
@@ -666,6 +670,10 @@ describe('/api/error-items', () => {
         });
 
         it('应该处理数据库错误', async () => {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+            });
             mocks.mockPrismaErrorItem.update.mockRejectedValue(new Error('Database error'));
 
             const request = new Request('http://localhost/api/error-items/error-item-1/notes', {
