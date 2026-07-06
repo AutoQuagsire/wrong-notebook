@@ -149,14 +149,45 @@ export async function GET(req: Request) {
             where: whereClause,
         });
 
+        // 默认不返回 originalImageUrl（Base64 图片超重，列表不需要），
+        // print-preview 需要时通过 ?includeImages=true 获取。
+        const includeImages = searchParams.get("includeImages") === "true";
+
+        const selectFields: Prisma.ErrorItemSelect = {
+            id: true,
+            userId: true,
+            subjectId: true,
+            subject: { select: { id: true, name: true, userId: true, createdAt: true, updatedAt: true } },
+            ocrText: true,
+            questionText: true,
+            answerText: true,
+            analysis: true,
+            wrongAnswerText: true,
+            mistakeAnalysis: true,
+            mistakeStatus: true,
+            knowledgePoints: true,
+            geogebraCommands: true,
+            questionType: true,
+            tags: { select: { id: true, name: true, subject: true, parentId: true, order: true, code: true, isSystem: true, userId: true, createdAt: true, updatedAt: true } },
+            source: true,
+            errorType: true,
+            userNotes: true,
+            masteryLevel: true,
+            gradeSemester: true,
+            paperLevel: true,
+            createdAt: true,
+            updatedAt: true,
+        };
+
+        if (includeImages) {
+            selectFields.originalImageUrl = true;
+        }
+
         // 分页查询
         const errorItems = await prisma.errorItem.findMany({
             where: whereClause,
             orderBy: { createdAt: "desc" },
-            include: {
-                subject: true,
-                tags: true,
-            },
+            select: selectFields,
             skip: (page - 1) * pageSize,
             take: pageSize,
         });
