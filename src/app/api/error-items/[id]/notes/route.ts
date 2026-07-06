@@ -7,7 +7,7 @@ import { createLogger } from "@/lib/logger";
 
 const logger = createLogger('api:error-items:notes');
 
-export async function PATCH(
+async function updateNotes(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
@@ -65,4 +65,13 @@ export async function PATCH(
         logger.error({ error, errorItemId: id }, "Error updating notes");
         return internalError("Failed to update notes");
     }
+}
+
+export { updateNotes as PATCH };
+
+export function POST(
+    req: Request,
+    context: { params: Promise<{ id: string }> }
+) {
+    return updateNotes(req, context);
 }
