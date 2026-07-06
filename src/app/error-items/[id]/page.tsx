@@ -407,7 +407,7 @@ export default function ErrorDetailPage() {
         if (!item) return;
 
         try {
-            await apiClient.patch(`/api/error-items/${item.id}/notes`, { userNotes: notesInput });
+            await apiClient.post(`/api/error-items/${item.id}/notes`, { userNotes: notesInput });
             setItem({ ...item, userNotes: notesInput });
             setIsEditingNotes(false);
             alert(t.common?.messages?.noteSaveSuccess || 'Notes saved successfully');
