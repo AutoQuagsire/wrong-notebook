@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Brain, Search } from "lucide-react";
+import { Plus, Brain, Search, Upload } from "lucide-react";
 
 interface KnowledgeItemSummary {
     id: string;
@@ -77,6 +77,11 @@ export default function KnowledgeListPage() {
                         <Link href="/knowledge/review">
                             <Button variant="outline">
                                 <Brain className="mr-2 h-4 w-4" />今日复习
+                            </Button>
+                        </Link>
+                        <Link href="/knowledge/import">
+                            <Button variant="outline">
+                                <Upload className="mr-2 h-4 w-4" />批量导入
                             </Button>
                         </Link>
                         <Link href="/knowledge/new">
