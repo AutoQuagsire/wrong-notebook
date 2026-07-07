@@ -16,7 +16,7 @@ import { AnalyzeResponse, Notebook, AppConfig } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { processImageFile } from "@/lib/image-utils";
-import { Upload, BookOpen, Tags, LogOut, BarChart3, PenLine, BookMarked } from "lucide-react";
+import { Upload, BookOpen, Tags, LogOut, BarChart3, PenLine, BookMarked, Brain } from "lucide-react";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { BroadcastNotification } from "@/components/broadcast-notification";
 import { signOut } from "next-auth/react";
@@ -600,7 +600,7 @@ function HomeContent() {
                 </div>
 
                 {/* Action Center */}
-                <div className={initialNotebookId ? "flex justify-center mb-6" : "grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-4"}>
+                <div className={initialNotebookId ? "flex justify-center mb-6" : "grid grid-cols-2 md:grid-cols-6 gap-2 md:gap-4"}>
                     <Button
                         size="lg"
                         className={`h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all ${initialNotebookId ? "w-full max-w-md" : ""}`}
@@ -650,6 +650,19 @@ function HomeContent() {
                                     <div className="flex items-center gap-1.5 md:gap-2">
                                         <BarChart3 className="h-4 w-4 md:h-5 md:w-5" />
                                         <span>{t.app?.stats || 'Stats'}</span>
+                                    </div>
+                                </Button>
+                            </Link>
+
+                            <Link href="/knowledge" className="w-full">
+                                <Button
+                                    variant="outline"
+                                    size="lg"
+                                    className="w-full h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
+                                >
+                                    <div className="flex items-center gap-1.5 md:gap-2">
+                                        <Brain className="h-4 w-4 md:h-5 md:w-5" />
+                                        <span>知识点抽背</span>
                                     </div>
                                 </Button>
                             </Link>
