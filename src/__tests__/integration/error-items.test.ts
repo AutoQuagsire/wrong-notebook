@@ -63,7 +63,7 @@ vi.mock('@/lib/grade-calculator', () => ({
 import { POST } from '@/app/api/error-items/route';
 import { GET as GET_ITEM, PUT } from '@/app/api/error-items/[id]/route';
 import { GET as GET_LIST } from '@/app/api/error-items/list/route';
-import { PATCH as PATCH_NOTES } from '@/app/api/error-items/[id]/notes/route';
+import { PATCH as PATCH_NOTES, POST as POST_NOTES } from '@/app/api/error-items/[id]/notes/route';
 import { PATCH as PATCH_MASTERY } from '@/app/api/error-items/[id]/mastery/route';
 import { DELETE as DELETE_ITEM } from '@/app/api/error-items/[id]/delete/route';
 import { getServerSession } from 'next-auth';
@@ -582,13 +582,13 @@ describe('/api/error-items', () => {
 
     describe('PATCH /api/error-items/[id]/notes (更新笔记)', () => {
         it('应该成功更新用户笔记', async () => {
-            const existingItem = {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
-                userNotes: '',
-            };
+            });
             mocks.mockPrismaErrorItem.update.mockResolvedValue({
-                ...existingItem,
+                id: 'error-item-1',
+                userId: 'user-123',
                 userNotes: '这道题需要注意移项变号',
             });
 
@@ -606,13 +606,13 @@ describe('/api/error-items', () => {
         });
 
         it('应该成功清空笔记', async () => {
-            const existingItem = {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
-                userNotes: '旧笔记内容',
-            };
+            });
             mocks.mockPrismaErrorItem.update.mockResolvedValue({
-                ...existingItem,
+                id: 'error-item-1',
+                userId: 'user-123',
                 userNotes: '',
             });
 
@@ -631,6 +631,10 @@ describe('/api/error-items', () => {
 
         it('应该成功保存长笔记', async () => {
             const longNote = '这是一段很长的笔记内容。'.repeat(100);
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+            });
             mocks.mockPrismaErrorItem.update.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
@@ -666,6 +670,10 @@ describe('/api/error-items', () => {
         });
 
         it('应该处理数据库错误', async () => {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+            });
             mocks.mockPrismaErrorItem.update.mockRejectedValue(new Error('Database error'));
 
             const request = new Request('http://localhost/api/error-items/error-item-1/notes', {
@@ -675,6 +683,123 @@ describe('/api/error-items', () => {
             });
 
             const response = await PATCH_NOTES(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(500);
+            expect(data.message).toBe('Failed to update notes');
+        });
+    });
+
+    describe('POST /api/error-items/[id]/notes (更新笔记, POST 兼容)', () => {
+        it('POST 合法 userNotes 更新成功', async () => {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+            });
+            mocks.mockPrismaErrorItem.update.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+                userNotes: 'POST 测试笔记',
+            });
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/notes', {
+                method: 'POST',
+                body: JSON.stringify({ userNotes: 'POST 测试笔记' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await POST_NOTES(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.userNotes).toBe('POST 测试笔记');
+        });
+
+        it('POST 空字符串 userNotes 更新成功', async () => {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+            });
+            mocks.mockPrismaErrorItem.update.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+                userNotes: '',
+            });
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/notes', {
+                method: 'POST',
+                body: JSON.stringify({ userNotes: '' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await POST_NOTES(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.userNotes).toBe('');
+        });
+
+        it('POST 未登录返回 401', async () => {
+            mocks.mockPrismaUser.findUnique.mockResolvedValue(null);
+            mocks.mockPrismaUser.findFirst.mockResolvedValue(null);
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/notes', {
+                method: 'POST',
+                body: JSON.stringify({ userNotes: '笔记' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await POST_NOTES(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(401);
+            expect(data.message).toBeDefined();
+        });
+
+        it('POST userNotes 非 string 返回 400', async () => {
+            const request = new Request('http://localhost/api/error-items/error-item-1/notes', {
+                method: 'POST',
+                body: JSON.stringify({ userNotes: 12345 }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await POST_NOTES(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBeDefined();
+        });
+
+        it('POST 错题不存在或不属于当前用户返回 404', async () => {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue(null);
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/notes', {
+                method: 'POST',
+                body: JSON.stringify({ userNotes: '笔记' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await POST_NOTES(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(404);
+            expect(data.message).toBeDefined();
+        });
+
+        it('POST 数据库错误返回 500', async () => {
+            mocks.mockPrismaErrorItem.findFirst.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+            });
+            mocks.mockPrismaErrorItem.update.mockRejectedValue(new Error('Database error'));
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/notes', {
+                method: 'POST',
+                body: JSON.stringify({ userNotes: '笔记' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await POST_NOTES(request, { params: Promise.resolve({ id: 'error-item-1' }) });
             const data = await response.json();
 
             expect(response.status).toBe(500);

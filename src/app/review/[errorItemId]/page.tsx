@@ -184,11 +184,11 @@ export default function ReviewPage() {
         setNotesSaving(true);
         setNotesSaved(false);
         try {
-            await apiClient.patch(`/api/error-items/${errorItemId}/notes`, { userNotes });
+            await apiClient.post(`/api/error-items/${errorItemId}/notes`, { userNotes });
             setNotesSaved(true);
             setTimeout(() => setNotesSaved(false), 2000);
-        } catch {
-            // 保存失败，不覆盖用户输入
+        } catch (error) {
+            console.warn("Notes save failed on review page:", error);
         } finally {
             setNotesSaving(false);
         }
