@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
@@ -22,41 +22,45 @@ model User {
   educationStage String? // primary, junior_high, senior_high, university
   enrollmentYear Int?
 
-  role      String   @default("user") // "admin" or "user"
-  isActive  Boolean  @default(true)   // 用户是否启用
+  role     String  @default("user") // "admin" or "user"
+  isActive Boolean @default(true) // 用户是否启用
 
-  errorItems ErrorItem[]
-  subjects   Subject[]
-  practiceRecords PracticeRecord[]
-  fsrsCards  FsrsCard[]
-  customTags KnowledgeTag[] // User's custom tags
+  errorItems           ErrorItem[]
+  subjects             Subject[]
+  practiceRecords      PracticeRecord[]
+  fsrsCards            FsrsCard[]
+  customTags           KnowledgeTag[] // User's custom tags
+  knowledgeItems       KnowledgeItem[]
+  KnowledgeReviewState KnowledgeReviewState[]
+  KnowledgeReviewLog   KnowledgeReviewLog[]
 }
 
 // 统一知识点标签表 (支持无限层级)
 model KnowledgeTag {
-  id        String   @id @default(cuid())
-  name      String   // 标签名，如 "勾股定理"
-  subject   String   // 学科，如 "math", "english"
+  id      String @id @default(cuid())
+  name    String // 标签名，如 "勾股定理"
+  subject String // 学科，如 "math", "english"
 
   // 层级控制 (邻接表模式)
-  parentId  String?
-  parent    KnowledgeTag?  @relation("TagHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children  KnowledgeTag[] @relation("TagHierarchy")
+  parentId String?
+  parent   KnowledgeTag?  @relation("TagHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children KnowledgeTag[] @relation("TagHierarchy")
 
   // 排序与编码
-  order     Int      @default(0) // 用于保持教材顺序
-  code      String?              // 如 "1.2.1"
+  order Int     @default(0) // 用于保持教材顺序
+  code  String? // 如 "1.2.1"
 
   // 区分系统预设 vs 用户自定义
-  isSystem  Boolean  @default(false)
-  userId    String?  // 如果是用户自定义标签，绑定 userId
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isSystem Boolean @default(false)
+  userId   String? // 如果是用户自定义标签，绑定 userId
+  user     User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // 与错题的多对多关系
   errorItems ErrorItem[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  KnowledgeItem KnowledgeItem[]
 
   // 联合索引：确保同一用户（或系统）下同一父节点下的标签名不重复
   @@unique([subject, name, userId, parentId])
@@ -73,18 +77,19 @@ model Subject {
 
   errorItems ErrorItem[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  KnowledgeItem KnowledgeItem[]
 
   @@unique([name, userId])
 }
 
 model ErrorItem {
-  id             String   @id @default(cuid())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subjectId      String?
-  subject        Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId String?
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   originalImageUrl String
   ocrText          String?
@@ -100,22 +105,22 @@ model ErrorItem {
   geogebraCommands String? // GeoGebra commands for interactive demo (JSON or newline-separated)
 
   // Question type classification
-  questionType     String   @default("OTHER") // CHOICE | FILL_BLANK | CALCULATION | PROOF | OTHER
+  questionType String @default("OTHER") // CHOICE | FILL_BLANK | CALCULATION | PROOF | OTHER
 
   // New: many-to-many relation with KnowledgeTag
-  tags             KnowledgeTag[]
-  
+  tags KnowledgeTag[]
+
   // User Metadata
-  source           String? // e.g. "Midterm Exam"
-  errorType        String? // e.g. "Calculation", "Concept"
-  userNotes        String?
-  
-  masteryLevel     Int     @default(0) // 0: New, 1: Reviewing, 2: Mastered
-  gradeSemester    String? // e.g. "Junior High Grade 2, 1st Semester"
-  paperLevel       String? // e.g. "A", "B", "Other"
-  
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  source    String? // e.g. "Midterm Exam"
+  errorType String? // e.g. "Calculation", "Concept"
+  userNotes String?
+
+  masteryLevel  Int     @default(0) // 0: New, 1: Reviewing, 2: Mastered
+  gradeSemester String? // e.g. "Junior High Grade 2, 1st Semester"
+  paperLevel    String? // e.g. "A", "B", "Other"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   reviewSchedules ReviewSchedule[]
   practiceRecords PracticeRecord[]
@@ -126,33 +131,33 @@ model ReviewSchedule {
   id          String    @id @default(cuid())
   errorItemId String
   errorItem   ErrorItem @relation(fields: [errorItemId], references: [id], onDelete: Cascade)
-  
+
   scheduledFor DateTime
   completedAt  DateTime?
   isCorrect    Boolean? // Result of the review
-  
-  createdAt    DateTime @default(now())
+
+  createdAt DateTime @default(now())
 }
 
 model PracticeRecord {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  subject   String?  // e.g. "Math", "Physics"
+  subject    String? // e.g. "Math", "Physics"
   difficulty String? // "easy", "medium", "hard", "harder"
-  isCorrect Boolean?
+  isCorrect  Boolean?
 
   // New fields for traceability and extended tracking
-  errorItemId   String?   // Links practice to specific ErrorItem
-  errorItem     ErrorItem? @relation(fields: [errorItemId], references: [id], onDelete: SetNull)
-  practiceType  String    @default("SIMILAR_QUESTION") // "SIMILAR_QUESTION", "ORIGINAL_REVIEW", etc.
-  rating        Int?      // FSRS rating: 1=Again, 2=Hard, 3=Good, 4=Easy
-  durationSeconds Int?    // Time taken to answer
-  usedHint      Boolean?  // Whether hints were used
-  independent   Boolean?  // Whether solved independently
-  answerText    String?   // User's submitted answer text
-  answerImageUrl String?  // Optional handwritten answer image (Base64/Data URL)
+  errorItemId     String? // Links practice to specific ErrorItem
+  errorItem       ErrorItem? @relation(fields: [errorItemId], references: [id], onDelete: SetNull)
+  practiceType    String     @default("SIMILAR_QUESTION") // "SIMILAR_QUESTION", "ORIGINAL_REVIEW", etc.
+  rating          Int? // FSRS rating: 1=Again, 2=Hard, 3=Good, 4=Easy
+  durationSeconds Int? // Time taken to answer
+  usedHint        Boolean? // Whether hints were used
+  independent     Boolean? // Whether solved independently
+  answerText      String? // User's submitted answer text
+  answerImageUrl  String? // Optional handwritten answer image (Base64/Data URL)
 
   createdAt DateTime @default(now())
 
@@ -160,26 +165,112 @@ model PracticeRecord {
 }
 
 model FsrsCard {
-  id            String   @id @default(cuid())
-  userId        String
-  errorItemId   String   @unique
+  id          String @id @default(cuid())
+  userId      String
+  errorItemId String @unique
 
-  due           DateTime @default(now())
-  stability     Float?
-  difficulty    Float?
-  elapsed_days  Int      @default(0)
-  scheduled_days Int     @default(0)
-  reps          Int      @default(0)
-  lapses        Int      @default(0)
-  state         String   @default("New")
-  last_review   DateTime?
+  due            DateTime  @default(now())
+  stability      Float?
+  difficulty     Float?
+  elapsed_days   Int       @default(0)
+  scheduled_days Int       @default(0)
+  reps           Int       @default(0)
+  lapses         Int       @default(0)
+  state          String    @default("New")
+  last_review    DateTime?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   errorItem ErrorItem @relation(fields: [errorItemId], references: [id], onDelete: Cascade)
 
   @@index([userId, due])
   @@index([errorItemId])
+}
+
+// 知识点卡片（抽背默写）
+model KnowledgeItem {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  // 核心内容
+  prompt String // 默写提示 / 题干
+  answer String // 标准答案
+  detail String? // 解析 / 详解（支持 Markdown / LaTeX）
+
+  // 分组
+  deck  String? // 章节 / 分组名
+  order Int     @default(0)
+
+  // 关联知识点标签
+  tagId String?
+  tag   KnowledgeTag? @relation(fields: [tagId], references: [id], onDelete: SetNull)
+
+  // 题型（第一版默认 DICTATION）
+  questionType String? @default("DICTATION") // DICTATION | CHOICE | FILL_BLANK | PROOF | OTHER
+
+  // 元数据
+  source           String? // 来源
+  manualDifficulty String? // 人工难度 ("easy" | "medium" | "hard")
+
+  // 关系
+  reviewState KnowledgeReviewState?
+  reviewLogs  KnowledgeReviewLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, subjectId])
+  @@index([userId, deck])
+  @@index([tagId])
+  @@index([subjectId])
+}
+
+// 知识点 FSRS 调度状态
+model KnowledgeReviewState {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgeItemId String        @unique
+  knowledgeItem   KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  due            DateTime  @default(now())
+  stability      Float?
+  difficulty     Float?
+  elapsed_days   Int       @default(0)
+  scheduled_days Int       @default(0)
+  reps           Int       @default(0)
+  lapses         Int       @default(0)
+  state          String    @default("New") // New | Learning | Review | Relearning
+  last_review    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, due])
+}
+
+// 知识点复习记录
+model KnowledgeReviewLog {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgeItemId String
+  knowledgeItem   KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  rating          Int // 1=Again 2=Hard 3=Good 4=Easy
+  isCorrect       Boolean? // rating >= 3 → true
+  answerText      String? // 用户提交答案
+  durationSeconds Int? // 答题耗时（秒）
+  nextReviewAt    DateTime? // 下次复习时间快照
+  scheduledDays   Int? // 调度天数快照
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([knowledgeItemId, createdAt])
 }
