@@ -5,6 +5,9 @@ import { getServerSession } from "next-auth";
 import { unauthorized, badRequest, forbidden, internalError } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
 import { processFsrsReview } from "@/lib/fsrs/service";
+import type { PrismaClient } from "@prisma/client";
+
+type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
 const logger = createLogger('api:practice:record');
 const ORIGINAL_REVIEW = "ORIGINAL_REVIEW";
@@ -14,6 +17,73 @@ const MAX_DURATION_SECONDS = 24 * 60 * 60;
 const MAX_IMAGE_DATA_URL_LENGTH = 2_000_000;
 const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpe?g|webp|gif);base64,/i;
 const EASY_STREAK_THRESHOLD = 3;
+
+/**
+ * Count consecutive Easy (rating=4) ORIGINAL_REVIEW records for a given errorItem.
+ * Stops counting when it hits a non-Easy ORIGINAL_REVIEW rating.
+ * SIMILAR_QUESTION records are skipped (they do NOT break the streak).
+ *
+ * Returns the count of consecutive Easy records (0 if the most recent
+ * ORIGINAL_REVIEW is not rating=4).
+ *
+ * In-tx variant: uses the same transaction client so it sees uncommitted writes.
+ */
+async function countConsecutiveEasyReviewsInTx(
+    tx: PrismaTx,
+    userId: string,
+    errorItemId: string,
+): Promise<number> {
+    const recentReviews = await tx.practiceRecord.findMany({
+        where: {
+            userId,
+            errorItemId,
+            practiceType: ORIGINAL_REVIEW,
+            rating: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { rating: true },
+        take: 10,
+    });
+
+    let count = 0;
+    for (const record of recentReviews) {
+        if (record.rating === 4) {
+            count++;
+        } else {
+            break;
+        }
+    }
+
+    return count;
+}
+
+async function countConsecutiveEasyReviews(
+    userId: string,
+    errorItemId: string,
+): Promise<number> {
+    const recentReviews = await prisma.practiceRecord.findMany({
+        where: {
+            userId,
+            errorItemId,
+            practiceType: ORIGINAL_REVIEW,
+            rating: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { rating: true },
+        take: 10,
+    });
+
+    let count = 0;
+    for (const record of recentReviews) {
+        if (record.rating === 4) {
+            count++;
+        } else {
+            break;
+        }
+    }
+
+    return count;
+}
 
 async function maybeMarkMasteredAfterEasyStreak(
     userId: string,
@@ -294,14 +364,63 @@ export async function POST(req: Request) {
                     },
                 });
 
-                const updatedCard = await processFsrsReview(userId, errorItemId, normalizedRating, tx);
+                // Compute Easy streak count BEFORE creating the record:
+                // count existing consecutive Easy ORIGINAL_REVIEW records.
+                // The current rating (just created above) counts as +1 if it's Easy.
+                let easyStreakCount = 0;
+                const existingEasyCount = await countConsecutiveEasyReviewsInTx(
+                    tx,
+                    userId,
+                    errorItemId,
+                );
+                if (normalizedRating === 4) {
+                    easyStreakCount = existingEasyCount + 1;
+                }
+
+                // Auto-mastery: 3+ consecutive Easy → delete FsrsCard + mark masteryLevel=2
+                if (easyStreakCount >= 3) {
+                    await tx.fsrsCard.deleteMany({
+                        where: { errorItemId, userId },
+                    });
+                    await tx.errorItem.updateMany({
+                        where: { id: errorItemId, userId, masteryLevel: { not: 2 } },
+                        data: { masteryLevel: 2 },
+                    });
+
+                    // Return a synthetic result — card has been deleted
+                    const now = new Date();
+                    return [created, {
+                        due: now,
+                        scheduled_days: 0,
+                        state: "Mastered",
+                        reps: 0,
+                        lapses: 0,
+                        stability: null,
+                        difficulty: null,
+                        elapsed_days: 0,
+                        last_review: now,
+                    }];
+                }
+
+                const updatedCard = await processFsrsReview(
+                    userId,
+                    errorItemId,
+                    normalizedRating,
+                    tx,
+                    easyStreakCount,
+                );
 
                 return [created, updatedCard];
             });
 
             // After successful FSRS review, check for easy streak → auto-master
+            // (backward compat: catch the case where easyStreakCount was computed
+            //  but auto-mastery wasn't applied in the tx because easyStreakCount < 3
+            //  and maybeMarkMasteredAfterEasyStreak is the old 3-in-a-row check)
             // Must run outside the transaction so the new record is visible
-            await maybeMarkMasteredAfterEasyStreak(userId, errorItemId);
+            if (normalizedRating !== 4) {
+                await maybeMarkMasteredAfterEasyStreak(userId, errorItemId);
+            }
 
             const responseBody = {
                 ...record,
