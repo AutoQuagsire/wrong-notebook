@@ -48,6 +48,9 @@ export default function KnowledgeDetailPage() {
     const [editDetail, setEditDetail] = useState("");
     const [editDeck, setEditDeck] = useState("");
     const [editError, setEditError] = useState<string | null>(null);
+    const [markUnknownLoading, setMarkUnknownLoading] = useState(false);
+    const [markUnknownError, setMarkUnknownError] = useState<string | null>(null);
+    const [markUnknownSuccess, setMarkUnknownSuccess] = useState<string | null>(null);
 
     const fetchItem = async () => {
         try {
@@ -102,6 +105,33 @@ export default function KnowledgeDetailPage() {
         }
     };
 
+    const handleMarkUnknown = async () => {
+        if (!item || markUnknownLoading) return;
+        const confirmed = window.confirm("确定将该知识点设为不会，并加入待复习队列吗？");
+        if (!confirmed) return;
+
+        setMarkUnknownLoading(true);
+        setMarkUnknownError(null);
+        setMarkUnknownSuccess(null);
+
+        try {
+            await apiClient.post<{
+                knowledgeItemId: string;
+                due: string;
+                state: string;
+                status: string;
+                message: string;
+            }, Record<string, never>>(`/api/knowledge-items/${id}/mark-unknown`, {});
+            setMarkUnknownSuccess("已设为不会，已加入待复习队列");
+            await fetchItem();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "设置失败";
+            setMarkUnknownError(message);
+        } finally {
+            setMarkUnknownLoading(false);
+        }
+    };
+
     if (loading) return <div className="p-8 text-center text-muted-foreground">加载中...</div>;
     if (!item) return <div className="p-8 text-center text-muted-foreground">知识点不存在</div>;
 
@@ -116,6 +146,16 @@ export default function KnowledgeDetailPage() {
                         <Link href={`/knowledge/review/${item.id}`}>
                             <Button variant="outline" size="sm"><Brain className="mr-1 h-4 w-4" />复习</Button>
                         </Link>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleMarkUnknown}
+                            disabled={markUnknownLoading}
+                            className="border-amber-500 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                        >
+                            <Brain className="mr-1 h-4 w-4" />
+                            {markUnknownLoading ? "正在设置..." : "设为不会"}
+                        </Button>
                         {!editing && (
                             <Button variant="outline" size="sm" onClick={startEdit}><Edit className="mr-1 h-4 w-4" />编辑</Button>
                         )}
@@ -174,6 +214,21 @@ export default function KnowledgeDetailPage() {
                                     {item.tag && <Badge variant="outline">{item.tag.name}</Badge>}
                                     {item.questionType && <Badge variant="outline">{item.questionType}</Badge>}
                                 </div>
+                                {(markUnknownError || markUnknownSuccess) && (
+                                    <div className="rounded-md border p-3 text-sm">
+                                        {markUnknownError && (
+                                            <p className="text-destructive">{markUnknownError}</p>
+                                        )}
+                                        {markUnknownSuccess && (
+                                            <div className="flex flex-wrap items-center gap-3">
+                                                <p className="text-green-700">{markUnknownSuccess}</p>
+                                                <Link href="/knowledge/review" className="text-primary hover:underline">
+                                                    去今日复习
+                                                </Link>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </>
                         )}
                     </CardContent>
