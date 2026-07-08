@@ -37,6 +37,25 @@ const STATE_NAME_TO_NUM: Record<string, number> = {
 
 const VALID_RATINGS = new Set([Rating.Again, Rating.Hard, Rating.Good, Rating.Easy]);
 
+// ---- Fixed-interval scheduling (replaces ts-fsrs adaptive algorithm) ----
+
+/** Days until next review for each rating. If rating is not in this map (or fixed-scheduling
+ *  is skipped for any reason), fall back to the legacy ts-fsrs call below. */
+const FIXED_SCHEDULED_DAYS: Record<number, number> = {
+    [Rating.Again]: 1,
+    [Rating.Hard]: 2,
+    [Rating.Good]: 5,
+    [Rating.Easy]: 7,
+};
+
+/** Easy-streak cap: consecutive-2 Easy → 3 days instead of 7. */
+const EASY_STREAK_2_DAYS = 3;
+
+/** After 3 or more consecutive Easy ratings the item is auto-mastered and removed from
+ *  the scheduling queue entirely — no due date is set (the card is deleted below). */
+
+// ---------------------------------------------------------------------------
+
 function toFsrsCardData(card: {
     due: Date;
     stability: number;
@@ -112,8 +131,45 @@ export function validateFsrsRating(rating: unknown): Rating {
 /**
  * Compute the next FSRS card state based on a rating.
  * Does not mutate the input card.
+ *
+ * Uses fixed-interval scheduling for Again/Hard/Good/Easy so that
+ * users always know exactly when the next review will be.
+ * Falls back to ts-fsrs adaptive scheduling for any rating not
+ * covered by the fixed-schedule table (shouldn't happen in practice).
  */
-export function computeNextCard(card: FsrsCardData, rating: number, now: Date): FsrsCardData {
+export function computeNextCard(
+    card: FsrsCardData,
+    rating: number,
+    now: Date,
+    _easyStreakCount: number = 0,
+): FsrsCardData {
+    const days = FIXED_SCHEDULED_DAYS[rating];
+    if (days !== undefined) {
+        const nextDue = new Date(now);
+        nextDue.setDate(nextDue.getDate() + days);
+
+        // State transitions mirror the old FSRS semantics but are much simpler:
+        // Again  → Relearning (lapse++)
+        // Hard   → Review (stable, slightly longer interval)
+        // Good   → Review
+        // Easy   → Review
+        const nextState =
+            rating === Rating.Again ? "Relearning" : "Review";
+
+        return {
+            ...card,
+            due: nextDue,
+            scheduled_days: days,
+            state: nextState,
+            reps: card.reps + 1,
+            lapses: rating === Rating.Again ? card.lapses + 1 : card.lapses,
+            elapsed_days: days,
+            last_review: new Date(now),
+            // Keep stability/difficulty as-is for display purposes
+        };
+    }
+
+    // Legacy fallback — only reached for ratings outside 1-4
     const fsrsRating = validateFsrsRating(rating);
     const tsCard = toTsFsrsCard(card);
     const nowDate = new Date(now);

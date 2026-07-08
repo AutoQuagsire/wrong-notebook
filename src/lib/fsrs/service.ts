@@ -113,6 +113,12 @@ export async function getFsrsCardId(errorItemId: string): Promise<string | null>
  * operations use that client so the caller can wrap this together
  * with PracticeRecord creation in a single Prisma.$transaction.
  *
+ * @param easyStreakCount - Number of consecutive Easy (rating=4) ORIGINAL_REVIEW
+ *   records for this errorItem, including the current one.
+ *   1 = first Easy → 7 days
+ *   2 = second consecutive Easy → 3 days
+ *   >= 3 = auto-mastered (caller must handle masteryLevel=2 + card deletion)
+ *
  * @throws if rating is invalid (not 1-4)
  */
 export async function processFsrsReview(
@@ -120,6 +126,7 @@ export async function processFsrsReview(
     errorItemId: string,
     rating: number,
     tx?: PrismaTx,
+    easyStreakCount: number = 0,
 ): Promise<FsrsCardData> {
     // Validate rating before doing any DB work
     validateFsrsRating(rating);
@@ -129,11 +136,36 @@ export async function processFsrsReview(
     // Get or create the card (within tx if provided)
     const card = await getOrCreateFsrsCard(userId, errorItemId, tx);
 
-    // Compute next state (pure function, no DB)
-    const computedCard = computeNextCard(card, rating, now);
+    // Override scheduled days for Easy streak adjustments
+    const effectiveRating = rating;
+    let scheduledDaysOverride: number | null = null;
 
-    // Clamp: never schedule the next review on the same calendar day
-    const nextCard = clampDueToNextDay(computedCard, now);
+    if (rating === 4) {
+        if (easyStreakCount === 2) {
+            // Second consecutive Easy → 3 days
+            scheduledDaysOverride = 3;
+        }
+        // easyStreakCount >= 3 handled by caller (auto-mastery, card deleted)
+    }
+
+    // Compute next state using fixed-interval scheduling
+    const computedCard = computeNextCard(card, effectiveRating, now);
+
+    // Apply Easy streak override if applicable
+    let nextCard: FsrsCardData;
+    if (scheduledDaysOverride !== null) {
+        const overrideDue = new Date(now);
+        overrideDue.setDate(overrideDue.getDate() + scheduledDaysOverride);
+        overrideDue.setHours(6, 0, 0, 0);
+        nextCard = {
+            ...computedCard,
+            due: overrideDue,
+            scheduled_days: scheduledDaysOverride,
+        };
+    } else {
+        // Clamp: never schedule the next review on the same calendar day
+        nextCard = clampDueToNextDay(computedCard, now);
+    }
 
     // Persist the update
     await saveFsrsCard(card.id, nextCard, tx);

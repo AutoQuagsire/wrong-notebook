@@ -1204,6 +1204,7 @@ describe('/api/practice', () => {
                 'error-item-1',
                 3,
                 expect.anything(), // tx client
+                0,                // easyStreakCount (rating != 4)
             );
         });
 
@@ -1227,6 +1228,7 @@ describe('/api/practice', () => {
                 'error-item-1',
                 1,
                 expect.anything(),
+                0, // easyStreakCount (rating != 4)
             );
         });
 
@@ -1250,6 +1252,7 @@ describe('/api/practice', () => {
                 'error-item-1',
                 2,
                 expect.anything(),
+                0, // easyStreakCount (rating != 4)
             );
         });
 
@@ -1273,6 +1276,7 @@ describe('/api/practice', () => {
                 'error-item-1',
                 4,
                 expect.anything(),
+                1, // easyStreakCount = 1 (first Easy, expect.anything for tx)
             );
         });
 
