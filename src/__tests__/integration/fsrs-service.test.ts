@@ -267,4 +267,48 @@ describe("FSRS Service", () => {
             expect(result.due.getTime()).toBeGreaterThanOrEqual(tomorrow.getTime());
         });
     });
+
+    describe("fixed-interval scheduling", () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+            mocks.mockFsrsCard.findUnique.mockResolvedValue(null);
+            mocks.mockFsrsCard.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+                id: "card-fixed",
+                ...args.data,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }));
+            mocks.mockFsrsCard.update.mockResolvedValue({});
+        });
+
+        it("Again (1) should schedule 1 day later", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 1);
+            expect(result.scheduled_days).toBe(1);
+            expect(result.state).toBe("Relearning");
+            expect(result.lapses).toBe(1);
+        });
+
+        it("Hard (2) should schedule 2 days later", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 2);
+            expect(result.scheduled_days).toBe(2);
+            expect(result.state).toBe("Review");
+        });
+
+        it("Good (3) should schedule 5 days later", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 3);
+            expect(result.scheduled_days).toBe(5);
+            expect(result.state).toBe("Review");
+        });
+
+        it("Easy (4) first time should schedule 7 days later", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 4, undefined, 1);
+            expect(result.scheduled_days).toBe(7);
+            expect(result.state).toBe("Review");
+        });
+
+        it("Second consecutive Easy should schedule 3 days later", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 4, undefined, 2);
+            expect(result.scheduled_days).toBe(3);
+        });
+    });
 });
