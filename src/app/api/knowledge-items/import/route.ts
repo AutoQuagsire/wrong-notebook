@@ -120,16 +120,13 @@ export async function POST(req: Request) {
                 continue;
             }
 
-            // Answer handling
+            // Answer handling: always allow empty — answer is no longer required
             let answer: string;
             const rawAnswer = item.answer;
             if (typeof rawAnswer === "string" && rawAnswer.trim().length > 0) {
                 answer = rawAnswer.trim();
-            } else if (allowPlaceholder) {
-                answer = "待补充答案";
             } else {
-                errors.push({ row, message: "answer is empty and allowPlaceholderAnswer is false" });
-                continue;
+                answer = "";
             }
 
             // TagId validation

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { ArrowLeft, Edit, Save, Trash2, Brain } from "lucide-react";
 import Link from "next/link";
@@ -44,8 +43,6 @@ export default function KnowledgeDetailPage() {
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
     const [editPrompt, setEditPrompt] = useState("");
-    const [editAnswer, setEditAnswer] = useState("");
-    const [editDetail, setEditDetail] = useState("");
     const [editDeck, setEditDeck] = useState("");
     const [editError, setEditError] = useState<string | null>(null);
     const [markUnknownLoading, setMarkUnknownLoading] = useState(false);
@@ -70,8 +67,6 @@ export default function KnowledgeDetailPage() {
     const startEdit = () => {
         if (!item) return;
         setEditPrompt(item.prompt);
-        setEditAnswer(item.answer);
-        setEditDetail(item.detail || "");
         setEditDeck(item.deck || "");
         setEditSource(item.source || "");
         setEditOrder(item.order != null ? String(item.order) : "");
@@ -80,15 +75,13 @@ export default function KnowledgeDetailPage() {
     };
 
     const handleSave = async () => {
-        if (!item || !editPrompt.trim() || !editAnswer.trim()) {
-            setEditError("题目和答案不能为空");
+        if (!item || !editPrompt.trim()) {
+            setEditError("知识点内容不能为空");
             return;
         }
         try {
             const updated = await apiClient.put<KnowledgeItemDetail>(`/api/knowledge-items/${id}`, {
                 prompt: editPrompt.trim(),
-                answer: editAnswer.trim(),
-                detail: editDetail || null,
                 deck: editDeck || null,
                 source: editSource.trim() || null,
                 order: editOrder.trim() ? parseInt(editOrder, 10) : undefined,
@@ -178,16 +171,8 @@ export default function KnowledgeDetailPage() {
                             <>
                                 {editError && <p className="text-destructive text-sm">{editError}</p>}
                                 <div>
-                                    <label className="text-sm font-medium">题目</label>
+                                    <label className="text-sm font-medium">知识点内容</label>
                                     <Input value={editPrompt} onChange={e => setEditPrompt(e.target.value)} />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium">答案</label>
-                                    <Textarea value={editAnswer} onChange={e => setEditAnswer(e.target.value)} rows={4} />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-medium">解析</label>
-                                    <Textarea value={editDetail} onChange={e => setEditDetail(e.target.value)} rows={3} />
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium">分组</label>
@@ -211,19 +196,9 @@ export default function KnowledgeDetailPage() {
                         ) : (
                             <>
                                 <div>
-                                    <p className="text-sm text-muted-foreground mb-1">题目 / 提示</p>
+                                    <p className="text-sm text-muted-foreground mb-1">知识点内容</p>
                                     <MarkdownRenderer content={item.prompt} />
                                 </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground mb-1">标准答案</p>
-                                    <MarkdownRenderer content={item.answer} />
-                                </div>
-                                {item.detail && (
-                                    <div>
-                                        <p className="text-sm text-muted-foreground mb-1">解析</p>
-                                        <MarkdownRenderer content={item.detail} />
-                                    </div>
-                                )}
                                 <div className="flex flex-wrap gap-2">
                                     {item.source && <Badge variant="outline" className="font-mono">#{item.source}</Badge>}
                                     {item.subject && <Badge variant="secondary">{item.subject.name}</Badge>}

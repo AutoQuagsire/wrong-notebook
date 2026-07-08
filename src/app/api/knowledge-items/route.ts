@@ -129,7 +129,6 @@ export async function POST(req: Request) {
 
     if (typeof subjectId !== "string" || subjectId.length === 0) return badRequest("subjectId is required");
     if (typeof prompt !== "string" || prompt.trim().length === 0) return badRequest("prompt is required");
-    if (typeof answer !== "string" || answer.trim().length === 0) return badRequest("answer is required");
 
     try {
         const user = await prisma.user.findUnique({ where: { email: session.user.email } });
@@ -202,7 +201,7 @@ export async function POST(req: Request) {
                 userId: user.id,
                 subjectId,
                 prompt: prompt.trim(),
-                answer: answer.trim(),
+                answer: (typeof answer === "string" && answer.trim().length > 0) ? answer.trim() : "",
                 detail: typeof detail === "string" ? detail : null,
                 deck: typeof deck === "string" ? deck : null,
                 order: effectiveOrder,

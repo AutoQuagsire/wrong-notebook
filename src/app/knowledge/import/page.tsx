@@ -71,7 +71,6 @@ export default function KnowledgeImportPage() {
                 setParseError("数组不能为空");
                 return;
             }
-            // Validate each item is an object
             for (let i = 0; i < parsed.length; i++) {
                 if (!parsed[i] || typeof parsed[i] !== "object") {
                     setParseError(`第 ${i + 1} 行不是有效对象`);
@@ -152,18 +151,6 @@ export default function KnowledgeImportPage() {
                                 placeholder="如：线性代数·第一章"
                             />
                         </div>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                id="allowPlaceholder"
-                                checked={allowPlaceholder}
-                                onChange={(e) => setAllowPlaceholder(e.target.checked)}
-                                className="rounded"
-                            />
-                            <label htmlFor="allowPlaceholder" className="text-sm">
-                                允许空答案（自动填入"待补充答案"）
-                            </label>
-                        </div>
                     </CardContent>
                 </Card>
 
@@ -178,7 +165,7 @@ export default function KnowledgeImportPage() {
                         <Textarea
                             value={jsonText}
                             onChange={(e) => { setJsonText(e.target.value); setParsedItems(null); setResult(null); }}
-                            placeholder={`粘贴 JSON 数组，例如：\n[\n  {\n    "code": "MFD-01",\n    "prompt": "默写：全微分定义",\n    "answer": "设函数 $z=f(x,y)$ ...",\n    "detail": "全微分是多元函数...",\n    "questionType": "DICTATION"\n  }\n]`}
+                            placeholder={`粘贴 JSON 数组，例如：\n[\n  {\n    "code": "MFD-01",\n    "prompt": "默写：全微分定义"\n  }\n]`}
                             rows={12}
                             className="font-mono text-sm"
                         />
@@ -207,7 +194,6 @@ export default function KnowledgeImportPage() {
                                                 <th className="text-left p-2">code</th>
                                                 <th className="text-left p-2">prompt</th>
                                                 <th className="text-left p-2">questionType</th>
-                                                <th className="text-left p-2">hasAnswer</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -215,11 +201,8 @@ export default function KnowledgeImportPage() {
                                                 <tr key={i} className="border-t">
                                                     <td className="p-2 text-muted-foreground">{i + 1}</td>
                                                     <td className="p-2">{item.code || "-"}</td>
-                                                    <td className="p-2 max-w-[200px] truncate">{item.prompt}</td>
+                                                    <td className="p-2 max-w-[300px] truncate">{item.prompt}</td>
                                                     <td className="p-2">{item.questionType || "DICTATION"}</td>
-                                                    <td className="p-2">
-                                                        {item.answer ? <CheckCircle className="h-4 w-4 text-green-500" /> : <AlertCircle className="h-4 w-4 text-yellow-500" />}
-                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
