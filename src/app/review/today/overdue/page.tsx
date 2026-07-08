@@ -71,12 +71,13 @@ function DueItemCard({ item }: { item: ReviewTodayItem }) {
                     <div className="min-w-0 overflow-hidden break-words text-base font-medium leading-7 text-foreground line-clamp-3 [&_.katex]:text-[1.05em]">
                         <MarkdownRenderer content={item.questionPreview} />
                     </div>
-                    {item.originalImageUrl ? (
+                    {item.imageUrl ? (
                         <Image
-                            src={item.originalImageUrl}
+                            src={item.imageUrl}
                             alt="题面缩略图"
                             width={640}
                             height={240}
+                            loading="lazy"
                             unoptimized
                             className="max-h-40 w-full max-w-full rounded-md border object-contain sm:max-w-sm"
                         />

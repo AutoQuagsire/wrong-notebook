@@ -678,4 +678,103 @@ describe("GET /api/review/today", () => {
             expect(upcomingCall.where.userId).toBe("user-123");
         });
     });
+
+    describe("image payload (no base64)", () => {
+        it("dueItems 不应包含 originalImageUrl base64", async () => {
+            mocks.mockFsrsCard.findMany.mockResolvedValue([
+                {
+                    id: "card-1",
+                    userId: "user-123",
+                    errorItemId: "err-1",
+                    due: yesterday,
+                    last_review: yesterday,
+                    reps: 2,
+                    lapses: 0,
+                    state: "Review",
+                    scheduled_days: 3,
+                    errorItem: {
+                        questionText: "测试题目",
+                        ocrText: null,
+                        originalImageUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk",
+                        subject: { id: "subj-math", name: "数学" },
+                    },
+                },
+            ]);
+            mocks.mockFsrsCard.count.mockResolvedValue(1);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            const body = JSON.stringify(data);
+            expect(body).not.toContain("data:image/");
+            expect(data.dueItems[0].hasImage).toBe(true);
+            expect(data.dueItems[0].imageUrl).toBe("/api/error-items/err-1/image");
+            expect(data.dueItems[0].originalImageUrl).toBeUndefined();
+        });
+
+        it("无图题目 hasImage 应为 false", async () => {
+            mocks.mockFsrsCard.findMany.mockResolvedValue([
+                {
+                    id: "card-1",
+                    userId: "user-123",
+                    errorItemId: "err-noimg",
+                    due: yesterday,
+                    last_review: yesterday,
+                    reps: 2,
+                    lapses: 0,
+                    state: "Review",
+                    scheduled_days: 3,
+                    errorItem: {
+                        questionText: "测试题目",
+                        ocrText: null,
+                        originalImageUrl: null,
+                        subject: { id: "subj-math", name: "数学" },
+                    },
+                },
+            ]);
+            mocks.mockFsrsCard.count.mockResolvedValue(1);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            expect(data.dueItems[0].hasImage).toBe(false);
+            expect(data.dueItems[0].imageUrl).toBeNull();
+        });
+
+        it("includeNew=true 时 newItems 也不应包含 base64", async () => {
+            mocks.mockFsrsCard.findMany
+                .mockResolvedValueOnce([]) // due cards
+                .mockResolvedValueOnce([]) // upcoming
+                .mockResolvedValueOnce([]); // existing fsrs errorItemIds
+            mocks.mockFsrsCard.count
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0);
+
+            mocks.mockErrorItem.findMany.mockResolvedValue([
+                {
+                    id: "err-new-img",
+                    questionText: "新错题有图片",
+                    ocrText: null,
+                    originalImageUrl: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA",
+                    subject: { id: "subj-math", name: "数学" },
+                },
+            ]);
+            mocks.mockErrorItem.count.mockResolvedValue(1);
+
+            const req = new Request("http://localhost/api/review/today?includeNew=true");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            const body = JSON.stringify(data);
+            expect(body).not.toContain("data:image/");
+            expect(data.newItems[0].hasImage).toBe(true);
+            expect(data.newItems[0].imageUrl).toBe("/api/error-items/err-new-img/image");
+            expect(data.newItems[0].originalImageUrl).toBeUndefined();
+        });
+    });
 });
