@@ -35,7 +35,7 @@ export async function GET(req: Request) {
             .filter(s => s.subject && activeSubjectNames.has(s.subject))
             .map(s => ({ name: s.subject!, value: s._count.id }));
 
-        // 2. Monthly Activity (Last 6 months)
+        // 2. Monthly Activity — select practiceType so we can separate accuracy from activity
         const sixMonthsAgo = subMonths(new Date(), 5);
         const activityStats = await prisma.practiceRecord.findMany({
             where: {
@@ -47,11 +47,14 @@ export async function GET(req: Request) {
             select: {
                 createdAt: true,
                 isCorrect: true,
-                difficulty: true
+                difficulty: true,
+                practiceType: true,
             }
         });
 
-        // Process activity stats into monthly counts
+        // Process activity stats into monthly counts.
+        // total = any practice record (both SIMILAR_QUESTION and ORIGINAL_REVIEW).
+        // correct = only SIMILAR_QUESTION records with isCorrect === true.
         const monthlyActivity: Record<string, { total: number, correct: number, [key: string]: number }> = {};
 
         // Initialize last 6 months
@@ -65,7 +68,8 @@ export async function GET(req: Request) {
             const date = format(record.createdAt, 'yyyy-MM');
             if (monthlyActivity[date]) {
                 monthlyActivity[date].total++;
-                if (record.isCorrect) {
+                // Only count correctness for SIMILAR_QUESTION records
+                if (record.practiceType === "SIMILAR_QUESTION" && record.isCorrect) {
                     monthlyActivity[date].correct++;
                 }
 
@@ -88,12 +92,15 @@ export async function GET(req: Request) {
             }
         });
 
-        // 4. Overall Correctness — only records with explicit boolean isCorrect
+        // 4. Overall Correctness — only SIMILAR_QUESTION records with explicit boolean isCorrect.
+        // ORIGINAL_REVIEW rating is a mastery self-assessment (Again/Hard/Good/Easy),
+        // not an objective right/wrong judgment, so it is excluded from accuracy stats.
+        const ACCURACY_PRACTICE_TYPE = "SIMILAR_QUESTION";
         const correctableRecords = await prisma.practiceRecord.count({
-            where: { userId, isCorrect: { not: null } },
+            where: { userId, practiceType: ACCURACY_PRACTICE_TYPE, isCorrect: { not: null } },
         });
         const correctRecords = await prisma.practiceRecord.count({
-            where: { userId, isCorrect: true },
+            where: { userId, practiceType: ACCURACY_PRACTICE_TYPE, isCorrect: true },
         });
 
         return NextResponse.json({
