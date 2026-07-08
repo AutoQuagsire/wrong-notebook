@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Brain, Search, Upload } from "lucide-react";
+import { Plus, Brain, Search, Upload, ArrowLeft } from "lucide-react";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 
 interface KnowledgeItemSummary {
@@ -68,26 +68,32 @@ export default function KnowledgeListPage() {
 
     return (
         <main className="min-h-screen p-4 md:p-8 bg-background">
-            <div className="max-w-6xl mx-auto space-y-6">
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">知识点抽背</h1>
+            <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
+                {/* Back home */}
+                <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    <ArrowLeft className="h-4 w-4" />返回首页
+                </Link>
+
+                {/* Header: title + actions */}
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                        <h1 className="text-xl md:text-2xl font-bold tracking-tight whitespace-nowrap">知识点抽背</h1>
                         <p className="text-muted-foreground text-sm">共 {total} 个知识点</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap md:shrink-0">
                         <Link href="/knowledge/review">
-                            <Button variant="outline">
-                                <Brain className="mr-2 h-4 w-4" />今日复习
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                                <Brain className="mr-1.5 h-4 w-4" />今日复习
                             </Button>
                         </Link>
                         <Link href="/knowledge/import">
-                            <Button variant="outline">
-                                <Upload className="mr-2 h-4 w-4" />批量导入
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                                <Upload className="mr-1.5 h-4 w-4" />批量导入
                             </Button>
                         </Link>
-                        <Link href="/knowledge/new">
-                            <Button>
-                                <Plus className="mr-2 h-4 w-4" />新建知识点
+                        <Link href="/knowledge/new" className="col-span-2 sm:col-span-1">
+                            <Button size="sm" className="w-full sm:w-auto">
+                                <Plus className="mr-1.5 h-4 w-4" />新建知识点
                             </Button>
                         </Link>
                     </div>

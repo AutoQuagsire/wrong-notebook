@@ -13,6 +13,34 @@ const VALID_RATINGS = new Set([1, 2, 3, 4]);
 const MAX_DURATION_SECONDS = 24 * 60 * 60;
 const MAX_IMAGE_DATA_URL_LENGTH = 2_000_000;
 const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:png|jpe?g|webp|gif);base64,/i;
+const EASY_STREAK_THRESHOLD = 3;
+
+async function maybeMarkMasteredAfterEasyStreak(
+    userId: string,
+    errorItemId: string,
+): Promise<void> {
+    const recentReviews = await prisma.practiceRecord.findMany({
+        where: {
+            userId,
+            errorItemId,
+            practiceType: ORIGINAL_REVIEW,
+            rating: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { rating: true, id: true },
+        take: EASY_STREAK_THRESHOLD,
+    });
+
+    if (
+        recentReviews.length === EASY_STREAK_THRESHOLD &&
+        recentReviews.every((r) => r.rating === 4)
+    ) {
+        await prisma.errorItem.updateMany({
+            where: { id: errorItemId, userId, masteryLevel: { not: 2 } },
+            data: { masteryLevel: 2 },
+        });
+    }
+}
 
 function normalizeAnswerText(value: unknown): string | null {
     if (typeof value !== "string") {
@@ -270,6 +298,10 @@ export async function POST(req: Request) {
 
                 return [created, updatedCard];
             });
+
+            // After successful FSRS review, check for easy streak → auto-master
+            // Must run outside the transaction so the new record is visible
+            await maybeMarkMasteredAfterEasyStreak(userId, errorItemId);
 
             const responseBody = {
                 ...record,

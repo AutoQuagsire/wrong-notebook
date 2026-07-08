@@ -18,16 +18,24 @@ export async function GET(req: Request) {
     const userId = session.user.id;
 
     try {
-        // 1. Subject Distribution
-        const subjectStats = await prisma.practiceRecord.groupBy({
+        // 1. Subject Distribution — only current active subjects
+        const activeSubjects = await prisma.subject.findMany({
+            where: { userId },
+            select: { id: true, name: true },
+        });
+        const activeSubjectNames = new Set(activeSubjects.map(s => s.name));
+
+        const rawSubjectStats = await prisma.practiceRecord.groupBy({
             by: ['subject'],
             where: { userId },
-            _count: {
-                id: true
-            }
+            _count: { id: true },
         });
 
-        // 2. Monthly Activity (Last 6 months)
+        const subjectStats = rawSubjectStats
+            .filter(s => s.subject && activeSubjectNames.has(s.subject))
+            .map(s => ({ name: s.subject!, value: s._count.id }));
+
+        // 2. Monthly Activity — select practiceType so we can separate accuracy from activity
         const sixMonthsAgo = subMonths(new Date(), 5);
         const activityStats = await prisma.practiceRecord.findMany({
             where: {
@@ -39,11 +47,14 @@ export async function GET(req: Request) {
             select: {
                 createdAt: true,
                 isCorrect: true,
-                difficulty: true
+                difficulty: true,
+                practiceType: true,
             }
         });
 
-        // Process activity stats into monthly counts
+        // Process activity stats into monthly counts.
+        // total = any practice record (both SIMILAR_QUESTION and ORIGINAL_REVIEW).
+        // correct = only SIMILAR_QUESTION records with isCorrect === true.
         const monthlyActivity: Record<string, { total: number, correct: number, [key: string]: number }> = {};
 
         // Initialize last 6 months
@@ -57,7 +68,8 @@ export async function GET(req: Request) {
             const date = format(record.createdAt, 'yyyy-MM');
             if (monthlyActivity[date]) {
                 monthlyActivity[date].total++;
-                if (record.isCorrect) {
+                // Only count correctness for SIMILAR_QUESTION records
+                if (record.practiceType === "SIMILAR_QUESTION" && record.isCorrect) {
                     monthlyActivity[date].correct++;
                 }
 
@@ -80,20 +92,25 @@ export async function GET(req: Request) {
             }
         });
 
-        // 4. Overall Correctness
-        const totalRecords = await prisma.practiceRecord.count({ where: { userId } });
+        // 4. Overall Correctness — only SIMILAR_QUESTION records with explicit boolean isCorrect.
+        // ORIGINAL_REVIEW rating is a mastery self-assessment (Again/Hard/Good/Easy),
+        // not an objective right/wrong judgment, so it is excluded from accuracy stats.
+        const ACCURACY_PRACTICE_TYPE = "SIMILAR_QUESTION";
+        const correctableRecords = await prisma.practiceRecord.count({
+            where: { userId, practiceType: ACCURACY_PRACTICE_TYPE, isCorrect: { not: null } },
+        });
         const correctRecords = await prisma.practiceRecord.count({
-            where: { userId, isCorrect: true }
+            where: { userId, practiceType: ACCURACY_PRACTICE_TYPE, isCorrect: true },
         });
 
         return NextResponse.json({
-            subjectStats: subjectStats.map(s => ({ name: s.subject || 'Unknown', value: s._count.id })),
+            subjectStats,
             activityStats: chartData,
             difficultyStats: difficultyStats.map(s => ({ name: s.difficulty || 'Unknown', value: s._count.id })),
             overallStats: {
-                total: totalRecords,
+                total: correctableRecords,
                 correct: correctRecords,
-                rate: totalRecords > 0 ? (correctRecords / totalRecords * 100).toFixed(1) : 0
+                rate: correctableRecords > 0 ? (correctRecords / correctableRecords * 100).toFixed(1) : 0
             }
         });
 

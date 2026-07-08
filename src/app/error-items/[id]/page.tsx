@@ -151,7 +151,7 @@ export default function ErrorDetailPage() {
     const toggleMastery = async () => {
         if (!item) return;
 
-        const newLevel = item.masteryLevel > 0 ? 0 : 1;
+        const newLevel = item.masteryLevel === 2 ? 0 : 2;
 
         try {
             await apiClient.patch(`/api/error-items/${item.id}/mastery`, { masteryLevel: newLevel });
@@ -462,11 +462,11 @@ export default function ErrorDetailPage() {
                         </Link>
                         <Button
                             size="sm"
-                            variant={item.masteryLevel > 0 ? "default" : "default"}
-                            className={item.masteryLevel > 0 ? "bg-green-600 hover:bg-green-700 text-white" : ""}
+                            variant={item.masteryLevel === 2 ? "default" : "default"}
+                            className={item.masteryLevel === 2 ? "bg-green-600 hover:bg-green-700 text-white" : ""}
                             onClick={toggleMastery}
                         >
-                            {item.masteryLevel > 0 ? (
+                            {item.masteryLevel === 2 ? (
                                 <>
                                     <CheckCircle className="mr-2 h-4 w-4" />
                                     {t.detail.mastered}

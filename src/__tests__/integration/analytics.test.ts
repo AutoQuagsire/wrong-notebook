@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
         count: vi.fn(),
         findMany: vi.fn(),
     },
+    mockPrismaSubject: {
+        findMany: vi.fn(),
+    },
     mockSession: {
         user: {
             id: 'user-123',
@@ -24,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
     prisma: {
         errorItem: mocks.mockPrismaErrorItem,
+        subject: mocks.mockPrismaSubject,
     },
 }));
 
@@ -44,6 +48,10 @@ describe('/api/analytics', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(getServerSession).mockResolvedValue(mocks.mockSession);
+        // Default: return active subjects that match the test data
+        mocks.mockPrismaSubject.findMany.mockResolvedValue([
+            { name: '数学' }, { name: '英语' }, { name: '物理' }, { name: '化学' },
+        ]);
     });
 
     describe('GET /api/analytics (获取分析统计)', () => {
@@ -104,6 +112,8 @@ describe('/api/analytics', () => {
 
         it('应该处理没有学科的错题', async () => {
             mocks.mockPrismaErrorItem.count.mockResolvedValue(0);
+            // subject: null items are filtered out by active subject check
+            mocks.mockPrismaSubject.findMany.mockResolvedValue([{ name: '数学' }]);
             mocks.mockPrismaErrorItem.findMany.mockResolvedValue([
                 { subject: null },
                 { subject: { name: '数学' } },
@@ -115,9 +125,13 @@ describe('/api/analytics', () => {
 
             expect(response.status).toBe(200);
 
+            // subject: null items are excluded (not mapped to "Unknown" anymore)
             const unknownStat = data.subjectStats.find((s: { name: string; value: number }) => s.name === 'Unknown');
-            expect(unknownStat).toBeDefined();
-            expect(unknownStat.value).toBe(1);
+            expect(unknownStat).toBeUndefined();
+
+            const mathStat = data.subjectStats.find((s: { name: string; value: number }) => s.name === '数学');
+            expect(mathStat).toBeDefined();
+            expect(mathStat.value).toBe(1);
         });
 
         it('应该返回7天的活动数据', async () => {

@@ -28,6 +28,13 @@ export async function PATCH(
 
         const { masteryLevel } = await req.json();
 
+        if (typeof masteryLevel !== "number" || ![0, 1, 2].includes(masteryLevel)) {
+            return NextResponse.json(
+                { message: "masteryLevel must be 0, 1, or 2" },
+                { status: 400 },
+            );
+        }
+
         // Verify ownership before update
         const existingItem = await prisma.errorItem.findUnique({
             where: { id },

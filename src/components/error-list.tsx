@@ -69,7 +69,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
         if (subjectId) params.append("subjectId", subjectId);
         if (search) params.append("query", search);
         if (masteryFilter !== "all") {
-            params.append("mastery", masteryFilter === "mastered" ? "1" : "0");
+            params.append("mastery", masteryFilter === "mastered" ? "2" : "0");
         }
         if (timeFilter !== "all") {
             params.append("timeRange", timeFilter);
@@ -400,10 +400,10 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                                     <CardHeader className="pb-0">
                                         <div className="flex justify-between items-start">
                                             <Badge
-                                                variant={item.masteryLevel > 0 ? "default" : "secondary"}
-                                                className={item.masteryLevel > 0 ? "bg-green-600 hover:bg-green-700" : ""}
+                                                variant={item.masteryLevel === 2 ? "default" : "secondary"}
+                                                className={item.masteryLevel === 2 ? "bg-green-600 hover:bg-green-700" : ""}
                                             >
-                                                {item.masteryLevel > 0 ? (
+                                                {item.masteryLevel === 2 ? (
                                                     <span className="flex items-center gap-1">
                                                         <CheckCircle className="h-3 w-3" /> {t.notebook.mastered}
                                                     </span>
