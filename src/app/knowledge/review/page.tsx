@@ -7,6 +7,7 @@ import { getKnowledgeTodayReviewList } from "@/lib/review/knowledge-today-servic
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { ArrowLeft, Play } from "lucide-react";
 
 export default async function KnowledgeReviewPage() {
@@ -77,9 +78,9 @@ export default async function KnowledgeReviewPage() {
                                     >
                                         <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
                                             <CardContent className="pt-4">
-                                                <p className="font-medium line-clamp-2 mb-2">
-                                                    {item.promptPreview}
-                                                </p>
+                                                <div className="font-medium line-clamp-2 mb-2 [&_p]:m-0 [&_.katex]:text-sm">
+                                                    <MarkdownRenderer content={item.promptPreview} />
+                                                </div>
                                                 <div className="flex flex-wrap gap-1 mb-2">
                                                     {item.subject && (
                                                         <Badge variant="secondary" className="text-xs">
@@ -119,9 +120,9 @@ export default async function KnowledgeReviewPage() {
                                     >
                                         <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
                                             <CardContent className="pt-4">
-                                                <p className="font-medium line-clamp-2 mb-2">
-                                                    {item.promptPreview}
-                                                </p>
+                                                <div className="font-medium line-clamp-2 mb-2 [&_p]:m-0 [&_.katex]:text-sm">
+                                                    <MarkdownRenderer content={item.promptPreview} />
+                                                </div>
                                                 <div className="flex flex-wrap gap-1">
                                                     {item.subject && (
                                                         <Badge variant="secondary" className="text-xs">
