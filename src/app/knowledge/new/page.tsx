@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save } from "lucide-react";
 
@@ -13,8 +12,6 @@ export default function NewKnowledgePage() {
     const router = useRouter();
     const [subjectId, setSubjectId] = useState("");
     const [prompt, setPrompt] = useState("");
-    const [answer, setAnswer] = useState("");
-    const [detail, setDetail] = useState("");
     const [deck, setDeck] = useState("");
     const [tagId, setTagId] = useState("");
     const [source, setSource] = useState("");
@@ -34,14 +31,13 @@ export default function NewKnowledgePage() {
 
     const handleSave = async () => {
         setError(null);
-        if (!subjectId || !prompt.trim() || !answer.trim()) {
-            setError("请填写学科和题目、答案");
+        if (!subjectId || !prompt.trim()) {
+            setError("请填写学科和知识点内容");
             return;
         }
         setSaving(true);
         try {
-            const item: Record<string, unknown> = { subjectId, prompt: prompt.trim(), answer: answer.trim(), questionType: "DICTATION" };
-            if (detail) item.detail = detail;
+            const item: Record<string, unknown> = { subjectId, prompt: prompt.trim(), questionType: "DICTATION" };
             if (deck) item.deck = deck;
             if (tagId) item.tagId = tagId;
             if (source.trim()) item.source = source.trim();
@@ -92,16 +88,8 @@ export default function NewKnowledgePage() {
                         </div>
                     </div>
                     <div>
-                        <label className="text-sm font-medium">题目 / 提示 *</label>
+                        <label className="text-sm font-medium">知识点内容 / 提示 *</label>
                         <Input value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="例如：默写勾股定理" />
-                    </div>
-                    <div>
-                        <label className="text-sm font-medium">答案 *</label>
-                        <Textarea value={answer} onChange={e => setAnswer(e.target.value)} placeholder="标准答案" rows={4} />
-                    </div>
-                    <div>
-                        <label className="text-sm font-medium">解析</label>
-                        <Textarea value={detail} onChange={e => setDetail(e.target.value)} placeholder="可选，支持 Markdown / LaTeX" rows={3} />
                     </div>
                     <div className="flex gap-2">
                         <Button onClick={handleSave} disabled={saving}>

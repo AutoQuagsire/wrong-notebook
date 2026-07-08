@@ -90,9 +90,8 @@ export default function KnowledgeReviewItemPage() {
                     {item.subject && <span className="text-sm text-muted-foreground">{item.subject.name}</span>}
                 </div>
 
-                {/* Prompt */}
                 <Card>
-                    <CardHeader><CardTitle className="text-base">题目 / 提示</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-base">知识点内容</CardTitle></CardHeader>
                     <CardContent>
                         <MarkdownRenderer content={item.prompt} />
                     </CardContent>
@@ -115,25 +114,12 @@ export default function KnowledgeReviewItemPage() {
                 {/* Reveal answer */}
                 {!revealed && !submitted && (
                     <div className="text-center">
-                        <Button onClick={handleReveal}>揭示答案</Button>
+                        <Button onClick={handleReveal}>开始评分</Button>
                     </div>
                 )}
 
                 {(revealed || submitted) && (
                     <>
-                        <Card>
-                            <CardHeader><CardTitle className="text-base">标准答案</CardTitle></CardHeader>
-                            <CardContent>
-                                <MarkdownRenderer content={item.answer} />
-                                {item.detail && (
-                                    <div className="mt-4 pt-4 border-t">
-                                        <p className="text-sm text-muted-foreground mb-1">解析</p>
-                                        <MarkdownRenderer content={item.detail} />
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-
                         {/* Rating buttons */}
                         {!submitted && (
                             <Card>

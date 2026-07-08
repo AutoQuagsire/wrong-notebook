@@ -107,26 +107,25 @@ describe("/api/knowledge-items/import", () => {
         expect(data.errors[0].message).toContain("prompt is required");
     });
 
-    // ── Validation: answer ──
-    it("skips item with empty answer when allowPlaceholderAnswer=false", async () => {
+    // ── Validation: answer — now always allowed (answer no longer required)
+    it("creates item without answer (answer no longer required)", async () => {
+        mocks.mockPrismaKnowledgeItem.create.mockResolvedValue({ id: "ki-1", prompt: "test" });
         const req = buildReq({
             subjectId: "s1",
-            allowPlaceholderAnswer: false,
-            items: [makeItem({ answer: "" })],
+            items: [makeItem({ prompt: "only prompt", answer: undefined })],
         });
         const res = await POST(req);
         expect(res.status).toBe(200);
         const data = await res.json();
-        expect(data.created).toBe(0);
-        expect(data.skipped).toBe(1);
-        expect(data.errors[0].message).toContain("answer is empty");
+        expect(data.created).toBe(1);
+        expect(data.skipped).toBe(0);
     });
 
-    it("creates with placeholder when allowPlaceholderAnswer=true", async () => {
+    it("creates item with empty answer (answer no longer required)", async () => {
         mocks.mockPrismaKnowledgeItem.create.mockResolvedValue({ id: "ki-1", prompt: "test" });
         const req = buildReq({
             subjectId: "s1",
-            allowPlaceholderAnswer: true,
+            allowPlaceholderAnswer: false,
             items: [makeItem({ answer: "" })],
         });
         const res = await POST(req);
@@ -176,7 +175,8 @@ describe("/api/knowledge-items/import", () => {
     it("handles mixed valid and skipped items", async () => {
         mocks.mockPrismaKnowledgeItem.create
             .mockResolvedValueOnce({ id: "ki-1", prompt: "p1" })
-            .mockResolvedValueOnce({ id: "ki-2", prompt: "p2" });
+            .mockResolvedValueOnce({ id: "ki-2", prompt: "p2" })
+            .mockResolvedValueOnce({ id: "ki-3", prompt: "p3" });
 
         const req = buildReq({
             subjectId: "s1",
@@ -184,16 +184,16 @@ describe("/api/knowledge-items/import", () => {
             items: [
                 makeItem({ prompt: "p1", answer: "a1" }),
                 makeItem({ prompt: "", answer: "a2" }),   // skipped - empty prompt
-                makeItem({ prompt: "p2", answer: "" }),    // skipped - empty answer
+                makeItem({ prompt: "p2", answer: "" }),    // valid - answer no longer required
                 makeItem({ prompt: "p3", answer: "a3" }),
             ],
         });
         const res = await POST(req);
         expect(res.status).toBe(200);
         const data = await res.json();
-        expect(data.created).toBe(2);
-        expect(data.skipped).toBe(2);
-        expect(data.errors.length).toBe(2);
+        expect(data.created).toBe(3);
+        expect(data.skipped).toBe(1);
+        expect(data.errors.length).toBe(1);
     });
 
     // ── Invalid JSON body ──

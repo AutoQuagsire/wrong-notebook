@@ -12,8 +12,6 @@ import { ArrowLeft, RotateCcw } from "lucide-react";
 interface SessionItem {
     knowledgeItemId: string;
     promptPreview: string;
-    answer: string;
-    detail: string | null;
     source?: string | null;
     subject: { id: string; name: string } | null;
     tag: { id: string; name: string } | null;
@@ -378,7 +376,7 @@ export default function KnowledgeReviewSessionClient() {
                                     </Badge>
                                 )}
                             </div>
-                            <CardTitle className="text-base">题目 / 提示</CardTitle>
+                            <CardTitle className="text-base">知识点内容</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <MarkdownRenderer content={currentItem.promptPreview} />
@@ -393,21 +391,6 @@ export default function KnowledgeReviewSessionClient() {
                             <div className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm min-h-24">
                                 {currentAnswer || "（本条未填写）"}
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">标准答案</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <MarkdownRenderer content={currentItem.answer} />
-                            {currentItem.detail && (
-                                <div className="mt-4 pt-4 border-t">
-                                    <p className="text-sm text-muted-foreground mb-1">解析</p>
-                                    <MarkdownRenderer content={currentItem.detail} />
-                                </div>
-                            )}
                         </CardContent>
                     </Card>
 
@@ -493,7 +476,7 @@ export default function KnowledgeReviewSessionClient() {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="space-y-2">
-                                    <p className="text-sm text-muted-foreground">题目 / 提示</p>
+                                    <p className="text-sm text-muted-foreground">知识点内容</p>
                                     <MarkdownRenderer content={item.promptPreview} />
                                 </div>
                             </CardContent>

@@ -14,7 +14,6 @@ import { MarkdownRenderer } from "@/components/markdown-renderer";
 interface KnowledgeItemSummary {
     id: string;
     prompt: string;
-    answer: string;
     deck: string | null;
     order: number;
     source: string | null;

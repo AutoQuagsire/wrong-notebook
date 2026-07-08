@@ -53,26 +53,26 @@ describe("/api/knowledge-items", () => {
     describe("POST", () => {
         it("returns 401 when not logged in", async () => {
             vi.mocked(getServerSession).mockResolvedValue(null);
-            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", prompt: "p", answer: "a" });
+            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", prompt: "p" });
             const res = await POST(req);
             expect(res.status).toBe(401);
         });
 
         it("returns 400 when subjectId missing", async () => {
-            const req = buildReq("POST", "/api/knowledge-items", { prompt: "p", answer: "a" });
+            const req = buildReq("POST", "/api/knowledge-items", { prompt: "p" });
             const res = await POST(req);
             expect(res.status).toBe(400);
         });
 
         it("returns 400 when prompt empty", async () => {
-            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", prompt: "", answer: "a" });
+            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", prompt: "" });
             const res = await POST(req);
             expect(res.status).toBe(400);
         });
 
         it("returns 404 when subject not found or not owned", async () => {
             mocks.mockPrismaSubject.findFirst.mockResolvedValue(null);
-            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", prompt: "p", answer: "a" });
+            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", prompt: "p" });
             const res = await POST(req);
             expect(res.status).toBe(404);
         });
@@ -80,21 +80,21 @@ describe("/api/knowledge-items", () => {
         it("returns 404 when tag not found", async () => {
             mocks.mockPrismaSubject.findFirst.mockResolvedValue({ id: "s1" });
             mocks.mockPrismaKnowledgeTag.findFirst.mockResolvedValue(null);
-            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", tagId: "bad", prompt: "p", answer: "a" });
+            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", tagId: "bad", prompt: "p" });
             const res = await POST(req);
             expect(res.status).toBe(404);
         });
 
-        it("creates successfully", async () => {
+        it("creates successfully without answer", async () => {
             mocks.mockPrismaSubject.findFirst.mockResolvedValue({ id: "s1" });
             mocks.mockPrismaKnowledgeItem.aggregate.mockResolvedValue({ _max: { order: 5 } } as any);
-            mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]); // for source auto-suggest
+            mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]);
             mocks.mockPrismaKnowledgeItem.create.mockResolvedValue({
-                id: "ki-1", userId: "user-123", subjectId: "s1", prompt: "p", answer: "a",
+                id: "ki-1", userId: "user-123", subjectId: "s1", prompt: "p", answer: "",
                 detail: null, deck: null, order: 0, tagId: null, questionType: "DICTATION",
                 source: null, manualDifficulty: null, createdAt: new Date(), updatedAt: new Date(),
             });
-            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", prompt: "p", answer: "a" });
+            const req = buildReq("POST", "/api/knowledge-items", { subjectId: "s1", prompt: "p" });
             const res = await POST(req);
             expect(res.status).toBe(201);
             const data = await res.json();
