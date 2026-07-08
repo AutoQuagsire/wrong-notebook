@@ -6,7 +6,7 @@ import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Brain } from "lucide-react";
+import { ArrowLeft, Brain, Play } from "lucide-react";
 
 interface TodayItem {
     knowledgeItemId: string;
@@ -73,9 +73,18 @@ export default function KnowledgeReviewPage() {
                             到期 {stats.dueCount} · 逾期 {stats.overdueCount} · 新卡片 {stats.newCount}
                         </p>
                     </div>
-                    <Link href="/knowledge">
-                        <Button variant="outline" size="sm"><ArrowLeft className="mr-1 h-4 w-4" />返回列表</Button>
-                    </Link>
+                    <div className="flex gap-2">
+                        {stats.dueCount > 0 && (
+                            <Link href="/knowledge/review/session">
+                                <Button>
+                                    <Play className="mr-1 h-4 w-4" />开始抽背
+                                </Button>
+                            </Link>
+                        )}
+                        <Link href="/knowledge">
+                            <Button variant="outline" size="sm"><ArrowLeft className="mr-1 h-4 w-4" />返回列表</Button>
+                        </Link>
+                    </div>
                 </div>
 
                 {/* Upcoming 7-day preview */}
