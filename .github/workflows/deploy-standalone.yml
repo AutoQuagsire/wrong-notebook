@@ -1,0 +1,198 @@
+name: Deploy Standalone to Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # ============================================
+  # 构建阶段：在 GitHub Ubuntu runner 上构建
+  # ============================================
+  build:
+    runs-on: ubuntu-latest
+    name: Build Standalone
+    timeout-minutes: 20
+
+    env:
+      DATABASE_URL: file:./ci-build.db
+      NEXTAUTH_SECRET: ci-build-secret
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Setup CI database
+        run: npx prisma migrate deploy
+
+      - name: Build application
+        run: |
+          NODE_OPTIONS="--max-old-space-size=4096" npx next build --webpack
+
+      - name: Verify build artifacts
+        run: |
+          test -f .next/BUILD_ID || (echo "ERROR: .next/BUILD_ID missing" && exit 1)
+          test -f .next/standalone/server.js || (echo "ERROR: .next/standalone/server.js missing" && exit 1)
+          test -d .next/standalone/.next || (echo "ERROR: .next/standalone/.next missing" && exit 1)
+          test -d .next/static || (echo "ERROR: .next/static missing" && exit 1)
+          echo "BUILD_ID=$(cat .next/BUILD_ID)"
+          echo "All build artifacts verified"
+
+      - name: Package standalone artifacts
+        run: |
+          tar -czf standalone-artifact.tar.gz \
+            .next/standalone \
+            .next/static \
+            public
+          ls -lh standalone-artifact.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-artifact
+          path: standalone-artifact.tar.gz
+          retention-days: 7
+
+  # ============================================
+  # 部署阶段：上传产物到生产服务器
+  # ============================================
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to Production
+    needs: build
+    timeout-minutes: 10
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: standalone-artifact
+
+      - name: Check deployment secrets
+        id: check
+        run: |
+          if [ -n "${{ secrets.PROD_SSH_KEY }}" ] && [ -n "${{ secrets.PROD_HOST }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "PROD_SSH_KEY and PROD_HOST configured, will deploy"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP: PROD_SSH_KEY or PROD_HOST not configured — artifact uploaded but not deployed"
+          fi
+
+      - name: Setup SSH agent
+        if: steps.check.outputs.ready == 'true'
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Deploy to production
+        if: steps.check.outputs.ready == 'true'
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER || 'root' }}
+          PROD_PATH: ${{ secrets.PROD_PATH || '/var/www/wrong-notebook' }}
+        run: |
+          set -e
+
+          echo "=== Upload artifact to production ==="
+          scp -o StrictHostKeyChecking=accept-new \
+            standalone-artifact.tar.gz \
+            "${PROD_USER}@${PROD_HOST}:/tmp/wrong-notebook-standalone.tar.gz"
+
+          echo "=== Deploy on production ==="
+          ssh -o StrictHostKeyChecking=accept-new "${PROD_USER}@${PROD_HOST}" "
+            set -e
+
+            echo '--- Stop service ---'
+            systemctl stop wrong-notebook || true
+            systemctl reset-failed wrong-notebook || true
+
+            cd ${PROD_PATH}
+
+            echo '--- Backup ---'
+            mkdir -p /var/backups/wrong-notebook
+            TS=\$(date +%Y%m%d-%H%M%S)
+            cp prisma/production.db /var/backups/wrong-notebook/production-deploy-\$TS.db
+            echo \"DB backup: /var/backups/wrong-notebook/production-deploy-\$TS.db\"
+
+            if [ -d .next ]; then
+              mv .next .next-bak-\$TS
+              echo \"Old .next backed up: .next-bak-\$TS\"
+            fi
+
+            echo '--- Extract artifact ---'
+            tar -xzf /tmp/wrong-notebook-standalone.tar.gz
+            rm /tmp/wrong-notebook-standalone.tar.gz
+
+            echo '--- Setup standalone ---'
+            mkdir -p .next/standalone/.next
+
+            rm -rf .next/standalone/.next/static
+            cp -r .next/static .next/standalone/.next/static
+            echo 'static copied to standalone'
+
+            rm -rf .next/standalone/public
+            if [ -d public ]; then
+              cp -r public .next/standalone/public
+              echo 'public copied to standalone'
+            else
+              echo 'NOTE: no public directory'
+            fi
+
+            cp .env .next/standalone/.env
+            echo \"standalone .env DATABASE_URL: \$(grep '^DATABASE_URL=' .next/standalone/.env)\"
+
+            echo '--- Verify standalone ---'
+            test -f .next/standalone/server.js || (echo 'ERROR: server.js missing' && exit 1)
+            test -d .next/standalone/.next/static || (echo 'ERROR: standalone static missing' && exit 1)
+            test -d .next/standalone/public && echo 'standalone public ok' || echo 'NOTE: no standalone public'
+            echo \"BUILD_ID=\$(cat .next/BUILD_ID)\"
+            echo 'All checks passed'
+
+            echo '--- Start service ---'
+            systemctl restart wrong-notebook
+            sleep 5
+
+            echo '--- Service status ---'
+            systemctl status wrong-notebook --no-pager | head -30
+
+            echo '--- Ports ---'
+            ss -lntp | grep -E ':80|:3000' || echo 'WARN: no listeners on 80 or 3000'
+
+            echo '--- Health check (127.0.0.1:3000) ---'
+            curl -sS -o /dev/null -w 'HTTP %{http_code}' --max-time 10 http://127.0.0.1:3000/login || echo 'FAIL'
+            echo ''
+            curl -sS -o /dev/null -w 'HTTP %{http_code}' --max-time 10 http://127.0.0.1:3000/knowledge || echo 'FAIL'
+            echo ''
+            curl -sS -o /dev/null -w 'HTTP %{http_code}' --max-time 10 http://127.0.0.1:3000/knowledge/review || echo 'FAIL'
+            echo ''
+            curl -sS -o /dev/null -w 'HTTP %{http_code}' --max-time 10 http://127.0.0.1:3000/knowledge/review/session || echo 'FAIL'
+            echo ''
+
+            echo '--- Health check (nginx 80) ---'
+            curl -sS -o /dev/null -w 'HTTP %{http_code}' --max-time 10 http://127.0.0.1/login || echo 'FAIL'
+            echo ''
+            curl -sS -o /dev/null -w 'HTTP %{http_code}' --max-time 10 http://127.0.0.1/knowledge || echo 'FAIL'
+            echo ''
+            curl -sS -o /dev/null -w 'HTTP %{http_code}' --max-time 10 http://127.0.0.1/knowledge/review || echo 'FAIL'
+            echo ''
+            curl -sS -o /dev/null -w 'HTTP %{http_code}' --max-time 10 http://127.0.0.1/knowledge/review/session || echo 'FAIL'
+            echo ''
+
+            echo '--- Journal logs ---'
+            journalctl -u wrong-notebook -n 20 --no-pager || true
+
+            echo '--- DEPLOY DONE ---'
+          "
