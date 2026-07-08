@@ -190,7 +190,12 @@ export interface ReviewTodayItem {
         name: string;
     } | null;
     questionPreview: string;
+    /** @deprecated Use imageUrl + hasImage instead. Kept for detail page compatibility. */
     originalImageUrl?: string | null;
+    /** Lightweight: URL to the image endpoint (or null if no image). */
+    imageUrl?: string | null;
+    /** Lightweight: whether this item has an attached image. */
+    hasImage?: boolean;
     due?: string;
     lastReview?: string | null;
     reps?: number;

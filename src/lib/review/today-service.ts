@@ -1,6 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import type { ReviewTodayItem, ReviewTodayResponse, UpcomingReviewDay } from "@/types/api";
 
+/** Map an errorItem.id (and whether it has an image) to lightweight image info. */
+function buildImageInfo(errorItemId: string, originalImageUrl?: string | null): {
+    hasImage: boolean;
+    imageUrl: string | null;
+} {
+    const hasImage = Boolean(originalImageUrl);
+    return {
+        hasImage,
+        imageUrl: hasImage ? `/api/error-items/${errorItemId}/image` : null,
+    };
+}
+
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const QUESTION_PREVIEW_MAX = 600;
@@ -114,7 +126,9 @@ export async function getTodayReviewList(
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // Query due FsrsCards joined with ErrorItem
+    // Query due FsrsCards joined with ErrorItem.
+    // We still select originalImageUrl so buildImageInfo can compute hasImage,
+    // but the value is NOT exposed in the API response — only hasImage/imageUrl.
     const dueCards = await prisma.fsrsCard.findMany({
         where: {
             userId,
@@ -144,7 +158,7 @@ export async function getTodayReviewList(
             card.errorItem.questionText,
             card.errorItem.ocrText,
         ),
-        originalImageUrl: card.errorItem.originalImageUrl,
+        ...buildImageInfo(card.errorItemId, card.errorItem.originalImageUrl),
         due: card.due.toISOString(),
         lastReview: card.last_review?.toISOString() ?? null,
         reps: card.reps,
@@ -229,7 +243,7 @@ export async function getTodayReviewList(
                 item.questionText,
                 item.ocrText,
             ),
-            originalImageUrl: item.originalImageUrl,
+            ...buildImageInfo(item.id, item.originalImageUrl),
         }));
 
         newCount = await prisma.errorItem.count({
