@@ -82,6 +82,9 @@ export default async function KnowledgeReviewPage() {
                                                     <MarkdownRenderer content={item.promptPreview} />
                                                 </div>
                                                 <div className="flex flex-wrap gap-1 mb-2">
+                                                    {item.source && (
+                                                        <Badge variant="outline" className="font-mono text-xs">#{item.source}</Badge>
+                                                    )}
                                                     {item.subject && (
                                                         <Badge variant="secondary" className="text-xs">
                                                             {item.subject.name}
