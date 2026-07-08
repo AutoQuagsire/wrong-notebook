@@ -3,7 +3,76 @@ import type { ReviewTodayItem, ReviewTodayResponse, UpcomingReviewDay } from "@/
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-const QUESTION_PREVIEW_MAX = 300;
+const QUESTION_PREVIEW_MAX = 600;
+
+/**
+ * Math-aware truncation: avoid slicing through LaTeX math blocks.
+ * If the raw cut point falls inside a $...$, $$...$$, \\(...\\),
+ * \\[...\\], or \\begin{...}...\\end{...} block, extend the preview
+ * to include the complete block so KaTeX can render it.
+ */
+function mathAwareTruncate(raw: string, maxLen: number): string {
+    if (raw.length <= maxLen) return raw;
+
+    // Find the nearest math block boundary at or after maxLen.
+    // We look for closing delimiters: $, $$, \\), \\], \\end{...}
+    const closePattern = /\$|\$\$|\\\\\)|\\\\\]|\\end\{[^}]+\}/g;
+    let match: RegExpExecArray | null;
+    let bestCut = maxLen;
+
+    closePattern.lastIndex = maxLen;
+    while ((match = closePattern.exec(raw)) !== null) {
+        // Check if we are inside a math block before this close.
+        // Open delimiters before this close, after bestCut.
+        const before = raw.slice(bestCut, match.index);
+        const openCount = (before.match(/\$[^$]|\$\$|\$\$|\\\\\(|\\\\\[|\\begin\{[^}]+\}/g) || []).length;
+        // Simple heuristic: if there were more opens than closes between
+        // bestCut and the closing delimiter, use this close as the cut.
+        // We just extend past any closing that follows an unmatched open.
+        const seg = raw.slice(0, match.index + match[0].length);
+        const dollarOpens = (seg.match(/(?<!\\)\$(?!\$)/g) || []).length;
+        const dollarCloses = (seg.match(/(?<!\\)\$(?!\$)/g) || []).length;
+
+        // For each potential close, check if the segment up to it is balanced.
+        // If not, extend; if yes, we can cut here.
+        if (isMathBalanced(seg)) {
+            bestCut = match.index + match[0].length;
+            break;
+        }
+        // Otherwise keep looking for the next close.
+    }
+
+    // If we couldn't find a balanced cut, just use maxLen (worst case:
+    // raw LaTeX appears; but this only happens for truly malformed input).
+    return raw.slice(0, bestCut) + (bestCut >= raw.length ? "" : "…");
+}
+
+function isMathBalanced(s: string): boolean {
+    // Count single $ (not $$)
+    const singles = s.match(/(?<!\$)\$(?!\$)/g) || [];
+    if (singles.length % 2 !== 0) return false;
+
+    // Count $$ pairs
+    const doubles = s.match(/\$\$/g) || [];
+    if (doubles.length % 2 !== 0) return false;
+
+    // Count \( / \) pairs
+    const openParen = (s.match(/\\\(/g) || []).length;
+    const closeParen = (s.match(/\\\)/g) || []).length;
+    if (openParen !== closeParen) return false;
+
+    // Count \[ / \] pairs
+    const openBracket = (s.match(/\\\[/g) || []).length;
+    const closeBracket = (s.match(/\\\]/g) || []).length;
+    if (openBracket !== closeBracket) return false;
+
+    // Count \begin{...} / \end{...} pairs
+    const begins = (s.match(/\\begin\{[^}]+\}/g) || []).length;
+    const ends = (s.match(/\\end\{[^}]+\}/g) || []).length;
+    if (begins !== ends) return false;
+
+    return true;
+}
 
 function buildQuestionPreview(
     questionText?: string | null,
@@ -11,7 +80,7 @@ function buildQuestionPreview(
 ): string {
     const raw = questionText || ocrText || "暂无题目内容";
     return raw.length > QUESTION_PREVIEW_MAX
-        ? raw.slice(0, QUESTION_PREVIEW_MAX) + "…"
+        ? mathAwareTruncate(raw, QUESTION_PREVIEW_MAX)
         : raw;
 }
 
