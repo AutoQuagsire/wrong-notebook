@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,8 +42,6 @@ const ratingOptions = [
 ];
 
 export default function KnowledgeReviewSessionPage() {
-    const router = useRouter();
-
     const [items, setItems] = useState<SessionItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -57,13 +54,30 @@ export default function KnowledgeReviewSessionPage() {
     const [error, setError] = useState<string | null>(null);
     const startTimeRef = useRef(Date.now());
 
-    useEffect(() => {
-        apiClient
-            .get<{ dueItems: SessionItem[] }>(
+    const loadSessionItems = async () => {
+        setError(null);
+        setLoading(true);
+
+        try {
+            const data = await apiClient.get<{ dueItems: SessionItem[] }>(
                 `/api/knowledge/review/today?limit=${SESSION_LIMIT}&includeNew=false`
-            )
-            .then((data) => setItems(data.dueItems))
-            .finally(() => setLoading(false));
+            );
+            setItems(data.dueItems);
+        } catch (err: unknown) {
+            const apiError = err as { status?: number; message?: string };
+            if (apiError?.status === 401) {
+                setError("请先登录后再开始抽背");
+            } else {
+                setError(apiError?.message || "加载失败，请稍后重试");
+            }
+            setItems([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadSessionItems();
     }, []);
 
     const resetForNext = () => {
@@ -133,24 +147,36 @@ export default function KnowledgeReviewSessionPage() {
 
     const handleRestart = () => {
         // Re-fetch a fresh set of due items
-        setLoading(true);
         setItems([]);
         setCurrentIndex(0);
         setResults([]);
         setSessionFinished(false);
         resetForNext();
-        apiClient
-            .get<{ dueItems: SessionItem[] }>(
-                `/api/knowledge/review/today?limit=${SESSION_LIMIT}&includeNew=false`
-            )
-            .then((data) => setItems(data.dueItems))
-            .finally(() => setLoading(false));
+        void loadSessionItems();
     };
 
     if (loading) {
         return (
             <main className="min-h-screen p-4 md:p-8 bg-background">
                 <div className="max-w-3xl mx-auto text-center py-12 text-muted-foreground">加载中...</div>
+            </main>
+        );
+    }
+
+    if (error && items.length === 0) {
+        return (
+            <main className="min-h-screen p-4 md:p-8 bg-background">
+                <div className="max-w-3xl mx-auto text-center py-12 space-y-4">
+                    <p className="text-muted-foreground">{error}</p>
+                    <div className="flex justify-center gap-2">
+                        <Link href="/knowledge/review">
+                            <Button variant="outline">返回今日复习</Button>
+                        </Link>
+                        <Link href="/knowledge">
+                            <Button variant="outline">返回知识点列表</Button>
+                        </Link>
+                    </div>
+                </div>
             </main>
         );
     }
