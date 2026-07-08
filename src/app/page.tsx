@@ -656,9 +656,9 @@ function HomeContent() {
 
                             <Link href="/knowledge" className="w-full">
                                 <Button
-                                    variant="outline"
+                                    variant="default"
                                     size="lg"
-                                    className="w-full h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all border hover:border-primary/50 hover:bg-accent/50"
+                                    className="w-full h-auto py-2.5 md:py-4 text-sm md:text-base shadow-sm hover:shadow-md transition-all"
                                 >
                                     <div className="flex items-center gap-1.5 md:gap-2">
                                         <Brain className="h-4 w-4 md:h-5 md:w-5" />
@@ -667,7 +667,7 @@ function HomeContent() {
                                 </Button>
                             </Link>
 
-                            <Link href="/review/today" className="w-full col-span-2 md:col-span-1">
+                            <Link href="/review/today" className="w-full">
                                 <Button
                                     variant="default"
                                     size="lg"
