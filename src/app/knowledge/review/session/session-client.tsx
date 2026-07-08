@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
-import { ArrowLeft, Play, CheckCircle, RotateCcw } from "lucide-react";
+import { ArrowLeft, RotateCcw } from "lucide-react";
 
 interface SessionItem {
     knowledgeItemId: string;
@@ -24,6 +24,15 @@ interface SessionItem {
     scheduledDays?: number;
 }
 
+interface SessionData {
+    dueItems: SessionItem[];
+    newItems: SessionItem[];
+}
+
+interface SessionEntry extends SessionItem {
+    sessionKind: "due" | "new";
+}
+
 interface SessionResult {
     knowledgeItemId: string;
     prompt: string;
@@ -32,37 +41,58 @@ interface SessionResult {
     scheduledDays: number;
 }
 
+type Phase = "answering" | "rating" | "done";
+
 const SESSION_LIMIT = 10;
 
 const ratingOptions = [
-    { value: 1, label: "不会 (Again)", variant: "destructive" as const },
-    { value: 2, label: "困难 (Hard)", variant: "outline" as const },
-    { value: 3, label: "正常 (Good)", variant: "secondary" as const },
-    { value: 4, label: "熟练 (Easy)", variant: "default" as const },
+    { value: 1, label: "不会 (Again)", variant: "destructive" as const, shortLabel: "Again" },
+    { value: 2, label: "困难 (Hard)", variant: "outline" as const, shortLabel: "Hard" },
+    { value: 3, label: "正常 (Good)", variant: "secondary" as const, shortLabel: "Good" },
+    { value: 4, label: "熟练 (Easy)", variant: "default" as const, shortLabel: "Easy" },
 ];
 
+function allocateSessionItems(data: SessionData): SessionEntry[] {
+    const dueEntries = data.dueItems.map((item) => ({ ...item, sessionKind: "due" as const }));
+    const remaining = Math.max(0, SESSION_LIMIT - dueEntries.length);
+    const newEntries = data.newItems
+        .slice(0, remaining)
+        .map((item) => ({ ...item, sessionKind: "new" as const }));
+
+    return [...dueEntries, ...newEntries].slice(0, SESSION_LIMIT);
+}
+
 export default function KnowledgeReviewSessionClient() {
-    const [items, setItems] = useState<SessionItem[]>([]);
+    const [items, setItems] = useState<SessionEntry[]>([]);
     const [loading, setLoading] = useState(true);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [answerText, setAnswerText] = useState("");
-    const [revealed, setRevealed] = useState(false);
-    const [submitting, setSubmitting] = useState(false);
-    const [submitted, setSubmitted] = useState(false);
+    const [phase, setPhase] = useState<Phase>("answering");
+    const [ratingIndex, setRatingIndex] = useState(0);
+    const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
+    const [lockedAnswers, setLockedAnswers] = useState<Record<string, string>>({});
     const [results, setResults] = useState<SessionResult[]>([]);
-    const [sessionFinished, setSessionFinished] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const startTimeRef = useRef(Date.now());
+    const answeringStartedAtRef = useRef(Date.now());
+    const answeringDurationRef = useRef(0);
 
     const loadSessionItems = async () => {
         setError(null);
         setLoading(true);
 
         try {
-            const data = await apiClient.get<{ dueItems: SessionItem[] }>(
-                `/api/knowledge/review/today?limit=${SESSION_LIMIT}&includeNew=false`
+            const data = await apiClient.get<SessionData>(
+                `/api/knowledge/review/today?limit=${SESSION_LIMIT}&includeNew=true`
             );
-            setItems(data.dueItems);
+
+            const sessionItems = allocateSessionItems(data);
+            setItems(sessionItems);
+            setPhase("answering");
+            setRatingIndex(0);
+            setAnswerDrafts({});
+            setLockedAnswers({});
+            setResults([]);
+            answeringStartedAtRef.current = Date.now();
+            answeringDurationRef.current = 0;
         } catch (err: unknown) {
             const apiError = err as { status?: number; message?: string };
             if (apiError?.status === 401) {
@@ -80,26 +110,39 @@ export default function KnowledgeReviewSessionClient() {
         void loadSessionItems();
     }, []);
 
-    const resetForNext = () => {
-        setAnswerText("");
-        setRevealed(false);
-        setSubmitted(false);
-        setSubmitting(false);
-        setError(null);
-        startTimeRef.current = Date.now();
+    const currentItem = items[ratingIndex] ?? null;
+    const currentAnswer = currentItem ? lockedAnswers[currentItem.knowledgeItemId] ?? "" : "";
+
+    const stats = useMemo(() => ({
+        again: results.filter((item) => item.rating === 1).length,
+        hard: results.filter((item) => item.rating === 2).length,
+        good: results.filter((item) => item.rating === 3).length,
+        easy: results.filter((item) => item.rating === 4).length,
+    }), [results]);
+
+    const updateAnswerDraft = (knowledgeItemId: string, value: string) => {
+        setAnswerDrafts((prev) => ({
+            ...prev,
+            [knowledgeItemId]: value,
+        }));
     };
 
-    const handleReveal = () => {
-        setRevealed(true);
+    const handleFinishAnswering = () => {
+        answeringDurationRef.current = Math.max(
+            0,
+            Math.floor((Date.now() - answeringStartedAtRef.current) / 1000)
+        );
+        setLockedAnswers(answerDrafts);
+        setRatingIndex(0);
+        setError(null);
+        setPhase("rating");
     };
 
     const handleSubmitRating = async (rating: number) => {
-        if (submitting || submitted) return;
+        if (!currentItem || submitting) return;
+
         setSubmitting(true);
         setError(null);
-
-        const item = items[currentIndex];
-        const durationSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
         try {
             const result = await apiClient.post<{
@@ -111,23 +154,30 @@ export default function KnowledgeReviewSessionClient() {
                     lapses: number;
                 };
             }>("/api/knowledge/review/submit", {
-                knowledgeItemId: item.knowledgeItemId,
+                knowledgeItemId: currentItem.knowledgeItemId,
                 rating,
-                answerText: answerText || null,
-                durationSeconds,
+                answerText: currentAnswer || null,
+                durationSeconds: answeringDurationRef.current,
             });
 
-            setResults((prev) => [
-                ...prev,
+            const nextResults = [
+                ...results,
                 {
-                    knowledgeItemId: item.knowledgeItemId,
-                    prompt: item.promptPreview,
+                    knowledgeItemId: currentItem.knowledgeItemId,
+                    prompt: currentItem.promptPreview,
                     rating,
                     nextReviewAt: result.reviewResult.nextReviewAt,
                     scheduledDays: result.reviewResult.scheduledDays,
                 },
-            ]);
-            setSubmitted(true);
+            ];
+
+            setResults(nextResults);
+
+            if (ratingIndex + 1 >= items.length) {
+                setPhase("done");
+            } else {
+                setRatingIndex((prev) => prev + 1);
+            }
         } catch (err: unknown) {
             const msg = (err as { message?: string })?.message || "提交失败";
             setError(msg);
@@ -136,28 +186,14 @@ export default function KnowledgeReviewSessionClient() {
         }
     };
 
-    const handleNext = () => {
-        if (currentIndex + 1 >= items.length) {
-            setSessionFinished(true);
-        } else {
-            setCurrentIndex((prev) => prev + 1);
-            resetForNext();
-        }
-    };
-
     const handleRestart = () => {
-        setItems([]);
-        setCurrentIndex(0);
-        setResults([]);
-        setSessionFinished(false);
-        resetForNext();
         void loadSessionItems();
     };
 
     if (loading) {
         return (
             <main className="min-h-screen p-4 md:p-8 bg-background">
-                <div className="max-w-3xl mx-auto text-center py-12 text-muted-foreground">加载中...</div>
+                <div className="max-w-5xl mx-auto text-center py-12 text-muted-foreground">加载中...</div>
             </main>
         );
     }
@@ -165,7 +201,7 @@ export default function KnowledgeReviewSessionClient() {
     if (error && items.length === 0) {
         return (
             <main className="min-h-screen p-4 md:p-8 bg-background">
-                <div className="max-w-3xl mx-auto text-center py-12 space-y-4">
+                <div className="max-w-5xl mx-auto text-center py-12 space-y-4">
                     <p className="text-muted-foreground">{error}</p>
                     <div className="flex justify-center gap-2">
                         <Link href="/knowledge/review">
@@ -180,17 +216,30 @@ export default function KnowledgeReviewSessionClient() {
         );
     }
 
-    if (sessionFinished) {
-        const again = results.filter((r) => r.rating === 1).length;
-        const hard = results.filter((r) => r.rating === 2).length;
-        const good = results.filter((r) => r.rating === 3).length;
-        const easy = results.filter((r) => r.rating === 4).length;
-
+    if (items.length === 0) {
         return (
             <main className="min-h-screen p-4 md:p-8 bg-background">
-                <div className="max-w-3xl mx-auto space-y-6">
+                <div className="max-w-5xl mx-auto text-center py-12 space-y-4">
+                    <p className="text-muted-foreground">当前没有可抽背的知识点</p>
+                    <div className="flex justify-center gap-2">
+                        <Link href="/knowledge/review">
+                            <Button variant="outline">返回今日复习</Button>
+                        </Link>
+                        <Link href="/knowledge">
+                            <Button variant="outline">返回知识点列表</Button>
+                        </Link>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
+    if (phase === "done") {
+        return (
+            <main className="min-h-screen p-4 md:p-8 bg-background">
+                <div className="max-w-5xl mx-auto space-y-6">
                     <div className="flex items-center justify-between">
-                        <h1 className="text-2xl font-bold tracking-tight">抽背完成</h1>
+                        <h1 className="text-2xl font-bold tracking-tight">本轮抽背完成</h1>
                         <Link href="/knowledge/review">
                             <Button variant="outline" size="sm">
                                 <ArrowLeft className="mr-1 h-4 w-4" />返回今日复习
@@ -200,24 +249,28 @@ export default function KnowledgeReviewSessionClient() {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">本轮结果</CardTitle>
+                            <CardTitle className="text-base">本轮统计</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-4 gap-4 mb-4 text-center">
+                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-5 text-center">
                                 <div>
-                                    <div className="text-2xl font-bold text-red-500">{again}</div>
+                                    <div className="text-2xl font-bold">{results.length}</div>
+                                    <div className="text-xs text-muted-foreground">总数量</div>
+                                </div>
+                                <div>
+                                    <div className="text-2xl font-bold text-red-500">{stats.again}</div>
                                     <div className="text-xs text-muted-foreground">Again</div>
                                 </div>
                                 <div>
-                                    <div className="text-2xl font-bold text-orange-500">{hard}</div>
+                                    <div className="text-2xl font-bold text-orange-500">{stats.hard}</div>
                                     <div className="text-xs text-muted-foreground">Hard</div>
                                 </div>
                                 <div>
-                                    <div className="text-2xl font-bold text-green-500">{good}</div>
+                                    <div className="text-2xl font-bold text-green-500">{stats.good}</div>
                                     <div className="text-xs text-muted-foreground">Good</div>
                                 </div>
                                 <div>
-                                    <div className="text-2xl font-bold text-blue-500">{easy}</div>
+                                    <div className="text-2xl font-bold text-blue-500">{stats.easy}</div>
                                     <div className="text-xs text-muted-foreground">Easy</div>
                                 </div>
                             </div>
@@ -225,42 +278,36 @@ export default function KnowledgeReviewSessionClient() {
                     </Card>
 
                     <div className="space-y-3">
-                        {results.map((r, i) => (
-                            <Card key={r.knowledgeItemId}>
+                        {results.map((result, index) => (
+                            <Card key={result.knowledgeItemId}>
                                 <CardContent className="pt-4">
                                     <div className="flex items-start justify-between gap-2">
-                                        <p className="font-medium text-sm flex-1 line-clamp-2">
-                                            {i + 1}. {r.prompt}
+                                        <p className="font-medium text-sm flex-1">
+                                            {index + 1}. {result.prompt}
                                         </p>
                                         <Badge
                                             variant={
-                                                r.rating === 1
+                                                result.rating === 1
                                                     ? "destructive"
-                                                    : r.rating === 2
+                                                    : result.rating === 2
                                                         ? "outline"
-                                                        : r.rating === 3
+                                                        : result.rating === 3
                                                             ? "secondary"
                                                             : "default"
                                             }
                                         >
-                                            {r.rating === 1
-                                                ? "Again"
-                                                : r.rating === 2
-                                                    ? "Hard"
-                                                    : r.rating === 3
-                                                        ? "Good"
-                                                        : "Easy"}
+                                            {ratingOptions.find((option) => option.value === result.rating)?.shortLabel}
                                         </Badge>
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        下次复习: {new Date(r.nextReviewAt).toLocaleDateString("zh-CN")} · {r.scheduledDays} 天
+                                        下次复习: {new Date(result.nextReviewAt).toLocaleDateString("zh-CN")} · {result.scheduledDays} 天
                                     </p>
                                 </CardContent>
                             </Card>
                         ))}
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <Link href="/knowledge/review">
                             <Button variant="outline">返回今日复习</Button>
                         </Link>
@@ -276,154 +323,179 @@ export default function KnowledgeReviewSessionClient() {
         );
     }
 
-    if (items.length === 0) {
+    if (phase === "rating" && currentItem) {
         return (
             <main className="min-h-screen p-4 md:p-8 bg-background">
-                <div className="max-w-3xl mx-auto text-center py-12 space-y-4">
-                    <p className="text-muted-foreground">当前没有到期知识点</p>
-                    <div className="flex justify-center gap-2">
+                <div className="max-w-4xl mx-auto space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight">逐个评分</h1>
+                            <p className="text-muted-foreground text-sm">
+                                第 {ratingIndex + 1} / {items.length} 条
+                            </p>
+                        </div>
                         <Link href="/knowledge/review">
-                            <Button variant="outline">返回今日复习</Button>
-                        </Link>
-                        <Link href="/knowledge">
-                            <Button variant="outline">返回知识点列表</Button>
+                            <Button variant="outline" size="sm">
+                                <ArrowLeft className="mr-1 h-4 w-4" />返回今日复习
+                            </Button>
                         </Link>
                     </div>
+
+                    <Card>
+                        <CardHeader>
+                            <div className="flex flex-wrap gap-2">
+                                {currentItem.subject && (
+                                    <Badge variant="secondary" className="text-xs">
+                                        {currentItem.subject.name}
+                                    </Badge>
+                                )}
+                                {currentItem.tag && (
+                                    <Badge variant="outline" className="text-xs">
+                                        {currentItem.tag.name}
+                                    </Badge>
+                                )}
+                                <Badge variant={currentItem.sessionKind === "due" ? "default" : "outline"} className="text-xs">
+                                    {currentItem.sessionKind === "due" ? "到期复习" : "新卡片"}
+                                </Badge>
+                                {currentItem.due && (
+                                    <Badge variant="outline" className="text-xs">
+                                        到期: {new Date(currentItem.due).toLocaleDateString("zh-CN")}
+                                    </Badge>
+                                )}
+                            </div>
+                            <CardTitle className="text-base">题目 / 提示</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <MarkdownRenderer content={currentItem.promptPreview} />
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">你的默写内容</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm min-h-24">
+                                {currentAnswer || "（本条未填写）"}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">标准答案</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <MarkdownRenderer content={currentItem.answer} />
+                            {currentItem.detail && (
+                                <div className="mt-4 pt-4 border-t">
+                                    <p className="text-sm text-muted-foreground mb-1">解析</p>
+                                    <MarkdownRenderer content={currentItem.detail} />
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">四级评分</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {error && <p className="text-destructive text-sm mb-2">{error}</p>}
+                            <div className="grid grid-cols-2 gap-3">
+                                {ratingOptions.map((option) => (
+                                    <Button
+                                        key={option.value}
+                                        variant={option.variant}
+                                        className="h-auto py-3 text-sm"
+                                        disabled={submitting}
+                                        onClick={() => handleSubmitRating(option.value)}
+                                    >
+                                        {option.label}
+                                    </Button>
+                                ))}
+                            </div>
+                            {submitting && (
+                                <p className="text-center text-muted-foreground mt-2">提交中...</p>
+                            )}
+                        </CardContent>
+                    </Card>
                 </div>
             </main>
         );
     }
 
-    const currentItem = items[currentIndex];
-    const progressPct = ((currentIndex + (submitted ? 1 : 0)) / items.length) * 100;
-
     return (
         <main className="min-h-screen p-4 md:p-8 bg-background">
-            <div className="max-w-3xl mx-auto space-y-6">
+            <div className="max-w-5xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">抽背</h1>
+                        <h1 className="text-2xl font-bold tracking-tight">开始抽背</h1>
                         <p className="text-muted-foreground text-sm">
-                            第 {currentIndex + 1} / {items.length} 条
+                            本轮共 {items.length} 条，默写完成后再逐个评分
                         </p>
                     </div>
                     <Link href="/knowledge/review">
                         <Button variant="outline" size="sm">
-                            <ArrowLeft className="mr-1 h-4 w-4" />退出
+                            <ArrowLeft className="mr-1 h-4 w-4" />返回今日复习
                         </Button>
                     </Link>
                 </div>
 
-                <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                        className="bg-primary h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${progressPct}%` }}
-                    />
-                </div>
-
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                            {currentItem.subject && (
-                                <Badge variant="secondary" className="text-xs">
-                                    {currentItem.subject.name}
-                                </Badge>
-                            )}
-                            {currentItem.tag && (
-                                <Badge variant="outline" className="text-xs">
-                                    {currentItem.tag.name}
-                                </Badge>
-                            )}
-                            {currentItem.due && (
-                                <Badge variant="outline" className="text-xs">
-                                    到期: {new Date(currentItem.due).toLocaleDateString("zh-CN")}
-                                </Badge>
-                            )}
-                        </div>
-                        <CardTitle className="text-base">题目 / 提示</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <MarkdownRenderer content={currentItem.promptPreview} />
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-base">你的默写</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Textarea
-                            value={answerText}
-                            onChange={(e) => setAnswerText(e.target.value)}
-                            placeholder="在这里默写答案..."
-                            rows={5}
-                            disabled={submitted}
-                        />
-                    </CardContent>
-                </Card>
-
-                {!revealed && !submitted && (
-                    <div className="text-center">
-                        <Button onClick={handleReveal} size="lg">
-                            <CheckCircle className="mr-1 h-4 w-4" />默写完成
-                        </Button>
-                    </div>
-                )}
-
-                {(revealed || submitted) && (
-                    <>
-                        <Card>
+                <div className="space-y-4">
+                    {items.map((item, index) => (
+                        <Card key={item.knowledgeItemId}>
                             <CardHeader>
-                                <CardTitle className="text-base">标准答案</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <MarkdownRenderer content={currentItem.answer} />
-                                {currentItem.detail && (
-                                    <div className="mt-4 pt-4 border-t">
-                                        <p className="text-sm text-muted-foreground mb-1">解析</p>
-                                        <MarkdownRenderer content={currentItem.detail} />
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="text-base">第 {index + 1} 条</CardTitle>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {item.subject && (
+                                                <Badge variant="secondary" className="text-xs">
+                                                    {item.subject.name}
+                                                </Badge>
+                                            )}
+                                            {item.tag && (
+                                                <Badge variant="outline" className="text-xs">
+                                                    {item.tag.name}
+                                                </Badge>
+                                            )}
+                                            <Badge variant={item.sessionKind === "due" ? "default" : "outline"} className="text-xs">
+                                                {item.sessionKind === "due" ? "到期复习" : "新卡片"}
+                                            </Badge>
+                                            {item.due && (
+                                                <Badge variant="outline" className="text-xs">
+                                                    到期: {new Date(item.due).toLocaleDateString("zh-CN")}
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">题目 / 提示</p>
+                                    <MarkdownRenderer content={item.promptPreview} />
+                                </div>
+                                <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">我的默写</p>
+                                    <Textarea
+                                        value={answerDrafts[item.knowledgeItemId] ?? ""}
+                                        onChange={(event) => updateAnswerDraft(item.knowledgeItemId, event.target.value)}
+                                        placeholder="可选：写下你的默写内容，也可以留空。"
+                                        rows={4}
+                                    />
+                                </div>
                             </CardContent>
                         </Card>
+                    ))}
+                </div>
 
-                        {!submitted && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-base">自我评价</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {error && <p className="text-destructive text-sm mb-2">{error}</p>}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {ratingOptions.map((opt) => (
-                                            <Button
-                                                key={opt.value}
-                                                variant={opt.variant}
-                                                className="h-auto py-3 text-sm"
-                                                disabled={submitting}
-                                                onClick={() => handleSubmitRating(opt.value)}
-                                            >
-                                                {opt.label}
-                                            </Button>
-                                        ))}
-                                    </div>
-                                    {submitting && (
-                                        <p className="text-center text-muted-foreground mt-2">提交中...</p>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {submitted && (
-                            <div className="text-center">
-                                <Button onClick={handleNext} size="lg">
-                                    <Play className="mr-1 h-4 w-4" />
-                                    {currentIndex + 1 >= items.length ? "查看结果" : "下一条"}
-                                </Button>
-                            </div>
-                        )}
-                    </>
-                )}
+                <div className="flex justify-center">
+                    <Button onClick={handleFinishAnswering} size="lg">
+                        默写完成，开始评分
+                    </Button>
+                </div>
             </div>
         </main>
     );
