@@ -40,13 +40,11 @@ export default async function KnowledgeReviewPage() {
                             </p>
                         </div>
                         <div className="flex gap-2">
-                            {stats.dueCount > 0 && (
-                                <Link href="/knowledge/review/session">
-                                    <Button>
-                                        <Play className="mr-1 h-4 w-4" />开始抽背
-                                    </Button>
-                                </Link>
-                            )}
+                            <Link href="/knowledge/review/session">
+                                <Button>
+                                    <Play className="mr-1 h-4 w-4" />开始抽背
+                                </Button>
+                            </Link>
                             <Link href="/knowledge">
                                 <Button variant="outline" size="sm">
                                     <ArrowLeft className="mr-1 h-4 w-4" />
