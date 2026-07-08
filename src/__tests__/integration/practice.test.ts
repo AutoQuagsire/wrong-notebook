@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     }),
     mockPrismaErrorItem: {
         findUnique: vi.fn(),
+        updateMany: vi.fn(),
     },
     mockPrismaPracticeRecord: {
         create: vi.fn(),
@@ -34,6 +35,7 @@ const mocks = vi.hoisted(() => ({
         findUnique: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        delete: vi.fn(),
     },
     mockSession: {
         user: {
@@ -1204,6 +1206,7 @@ describe('/api/practice', () => {
                 'error-item-1',
                 3,
                 expect.anything(), // tx client
+                0, // easyStreakCount
             );
         });
 
@@ -1227,6 +1230,7 @@ describe('/api/practice', () => {
                 'error-item-1',
                 1,
                 expect.anything(),
+                0,
             );
         });
 
@@ -1250,10 +1254,17 @@ describe('/api/practice', () => {
                 'error-item-1',
                 2,
                 expect.anything(),
+                0,
             );
         });
 
         it('Rating 4 (Easy) 应调用 processFsrsReview', async () => {
+            // Mock: after creating the practice record in tx, findMany sees
+            // the current Easy record as the most recent ORIGINAL_REVIEW.
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValueOnce([
+                { rating: 4 },
+            ]);
+
             const request = new Request('http://localhost/api/practice/record', {
                 method: 'POST',
                 body: JSON.stringify({
@@ -1273,6 +1284,7 @@ describe('/api/practice', () => {
                 'error-item-1',
                 4,
                 expect.anything(),
+                1,
             );
         });
 
@@ -1530,6 +1542,194 @@ describe('/api/practice', () => {
                 nextDay.getMonth() > nowDate.getMonth() ||
                 nextDay.getDate() >= nowDate.getDate() + 1;
             expect(isTomorrowOrLater).toBe(true);
+        });
+    });
+
+    describe('TASK-023: Easy streak and auto-mastery', () => {
+        const mockOwnedErrorItem = {
+            userId: 'user-123',
+            subject: { name: '数学' },
+        };
+
+        beforeEach(() => {
+            vi.clearAllMocks();
+            vi.mocked(getServerSession).mockResolvedValue(mocks.mockSession);
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
+            mocks.mockPrismaPracticeRecord.findFirst.mockResolvedValue(null);
+            mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({
+                id: `record-streak-${Date.now()}`,
+                ...args.data,
+                createdAt: new Date(),
+            }));
+        });
+
+        function makeRequest(rating: number) {
+            return new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-streak',
+                    practiceType: 'ORIGINAL_REVIEW',
+                    rating,
+                    durationSeconds: 60,
+                    revealedAnswer: true,
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+
+        it('First Easy → easyStreakCount=1 passed to processFsrsReview', async () => {
+            // The current record (rating=4) was just created in this tx,
+            // so findMany sees it as the most recent ORIGINAL_REVIEW.
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                { rating: 4 }, // ← current record
+            ]);
+
+            const response = await RECORD_POST(makeRequest(4));
+            expect(response.status).toBe(200);
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-streak',
+                4,
+                expect.anything(),
+                1, // easyStreakCount = 1 (first Easy)
+            );
+        });
+
+        it('Second consecutive Easy → easyStreakCount=2', async () => {
+            // Current + 1 prior Easy = streak of 2
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                { rating: 4 }, // ← current record
+                { rating: 4 }, // prior Easy
+            ]);
+
+            const response = await RECORD_POST(makeRequest(4));
+            expect(response.status).toBe(200);
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-streak',
+                4,
+                expect.anything(),
+                2, // easyStreakCount = 2 (this + 1 prior)
+            );
+        });
+
+        it('Third consecutive Easy → easyStreakCount=3, masteryLevel set to 2', async () => {
+            // Current + 2 prior Easy = streak of 3
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                { rating: 4 }, // ← current record
+                { rating: 4 }, // prior Easy #1
+                { rating: 4 }, // prior Easy #2
+            ]);
+
+            const response = await RECORD_POST(makeRequest(4));
+            expect(response.status).toBe(200);
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-streak',
+                4,
+                expect.anything(),
+                3,
+            );
+            // FsrsCard is NOT deleted
+            expect(mocks.mockFsrsCard.delete).not.toHaveBeenCalled();
+            // masteryLevel=2 was set
+            expect(mocks.mockPrismaErrorItem.updateMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({ id: 'error-item-streak' }),
+                    data: { masteryLevel: 2 },
+                })
+            );
+        });
+
+        it('Easy, Good, Easy → 最后一次 Easy count=1', async () => {
+            // Current Easy, then prior Good (breaks streak), then prior Easy
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                { rating: 4 }, // ← current record
+                { rating: 3 }, // Good — breaks streak
+                { rating: 4 }, // prior Easy — not counted because Good broke it
+            ]);
+
+            const response = await RECORD_POST(makeRequest(4));
+            expect(response.status).toBe(200);
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-streak',
+                4,
+                expect.anything(),
+                1,
+            );
+        });
+
+        it('Easy, SIMILAR_QUESTION, Easy → SIMILAR_QUESTION ignored, count=2', async () => {
+            // findMany only queries ORIGINAL_REVIEW records, so SIMILAR_QUESTION
+            // is never returned. The view is: current Easy + 1 prior Easy.
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                { rating: 4 }, // ← current record
+                { rating: 4 }, // prior Easy (the SIMILAR_QUESTION is invisible)
+            ]);
+
+            const response = await RECORD_POST(makeRequest(4));
+            expect(response.status).toBe(200);
+
+            // Verify the query filtered by ORIGINAL_REVIEW
+            const findManyCall = mocks.mockPrismaPracticeRecord.findMany.mock.calls[0][0] as { where: Record<string, unknown> };
+            expect(findManyCall.where.practiceType).toBe('ORIGINAL_REVIEW');
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-streak',
+                4,
+                expect.anything(),
+                2, // SIMILAR_QUESTION skipped, Easy streak continues
+            );
+        });
+
+        it('Rating 1 → easyStreakCount=0 (streak broken immediately)', async () => {
+            // Current rating is 1 (Again), prior Easy records don't matter.
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                { rating: 1 }, // ← current record is Again → breaks streak
+                { rating: 4 },
+                { rating: 4 },
+                { rating: 4 },
+            ]);
+
+            const response = await RECORD_POST(makeRequest(1));
+            expect(response.status).toBe(200);
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-streak',
+                1,
+                expect.anything(),
+                0,
+            );
+        });
+
+        it('Good does not trigger masteryLevel=2', async () => {
+            // Current Good breaks any prior Easy streak
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                { rating: 3 }, // ← current Good → breaks streak
+                { rating: 4 },
+                { rating: 4 },
+                { rating: 4 },
+            ]);
+
+            const response = await RECORD_POST(makeRequest(3));
+            expect(response.status).toBe(200);
+
+            expect(mocks.mockProcessFsrsReview).toHaveBeenCalledWith(
+                'user-123',
+                'error-item-streak',
+                3,
+                expect.anything(),
+                0, // Good breaks streak
+            );
+            // masteryLevel=2 was NOT set
+            expect(mocks.mockPrismaErrorItem.updateMany).not.toHaveBeenCalled();
         });
     });
 });

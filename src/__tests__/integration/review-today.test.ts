@@ -777,4 +777,131 @@ describe("GET /api/review/today", () => {
             expect(data.newItems[0].originalImageUrl).toBeUndefined();
         });
     });
+
+    describe("masteryLevel=2 filtering", () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+            vi.mocked(getServerSession).mockResolvedValue(mocks.mockSession);
+            mocks.mockFsrsCard.findMany.mockResolvedValue([]);
+            mocks.mockFsrsCard.count.mockResolvedValue(0);
+            mocks.mockErrorItem.findMany.mockResolvedValue([]);
+            mocks.mockErrorItem.count.mockResolvedValue(0);
+        });
+        it("dueItems 不应包含 masteryLevel=2 的错题", async () => {
+            mocks.mockFsrsCard.findMany.mockResolvedValue([]);
+            mocks.mockFsrsCard.count.mockResolvedValue(0);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            expect(data.dueItems).toHaveLength(0);
+
+            const dueCall = mocks.mockFsrsCard.findMany.mock.calls[0][0] as {
+                where: { errorItem: { masteryLevel: { not: number } } };
+            };
+            expect(dueCall.where.errorItem).toBeDefined();
+            expect(dueCall.where.errorItem.masteryLevel).toEqual({ not: 2 });
+        });
+
+        it("overdueCount 不应计入 masteryLevel=2 的题", async () => {
+            mocks.mockFsrsCard.findMany.mockResolvedValue([]);
+            mocks.mockFsrsCard.count
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            expect(data.stats.overdueCount).toBe(0);
+
+            const overdueCall = mocks.mockFsrsCard.count.mock.calls[1][0] as {
+                where: { errorItem: { masteryLevel: { not: number } } };
+            };
+            expect(overdueCall.where.errorItem.masteryLevel).toEqual({ not: 2 });
+        });
+
+        it("upcoming 不应包含 masteryLevel=2 的卡", async () => {
+            mocks.mockFsrsCard.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+            mocks.mockFsrsCard.count
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0);
+            mocks.mockErrorItem.count.mockResolvedValue(0);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+
+            const upcomingCall = mocks.mockFsrsCard.findMany.mock.calls[1][0] as {
+                where: { errorItem: { masteryLevel: { not: number } } };
+            };
+            expect(upcomingCall.where.errorItem.masteryLevel).toEqual({ not: 2 });
+        });
+
+        it("newItems 不应包含 masteryLevel=2 的题", async () => {
+            mocks.mockFsrsCard.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+            mocks.mockFsrsCard.count
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0);
+            mocks.mockErrorItem.findMany.mockResolvedValue([]);
+            mocks.mockErrorItem.count.mockResolvedValue(0);
+
+            const req = new Request("http://localhost/api/review/today?includeNew=true");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+
+            const newCall = mocks.mockErrorItem.findMany.mock.calls[0][0] as {
+                where: { masteryLevel: { not: number } };
+            };
+            expect(newCall.where.masteryLevel).toEqual({ not: 2 });
+        });
+
+        it("newCount 不应计入 masteryLevel=2 的题", async () => {
+            mocks.mockFsrsCard.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+            mocks.mockFsrsCard.count
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0);
+            mocks.mockErrorItem.count.mockResolvedValue(0);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+
+            const countCall = mocks.mockErrorItem.count.mock.calls[0][0] as {
+                where: { masteryLevel: { not: number } };
+            };
+            expect(countCall.where.masteryLevel).toEqual({ not: 2 });
+        });
+
+        it("含 masteryLevel=2 过滤的 today response 仍不包含 data:image/", async () => {
+            mocks.mockFsrsCard.findMany.mockResolvedValue([]);
+            mocks.mockFsrsCard.count.mockResolvedValue(0);
+
+            const req = new Request("http://localhost/api/review/today");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            const body = JSON.stringify(data);
+            expect(body).not.toContain("data:image/");
+        });
+    });
 });

@@ -267,4 +267,142 @@ describe("FSRS Service", () => {
             expect(result.due.getTime()).toBeGreaterThanOrEqual(tomorrow.getTime());
         });
     });
+
+    describe("fixed-interval scheduling", () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+            mocks.mockFsrsCard.findUnique.mockResolvedValue(null);
+            mocks.mockFsrsCard.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+                id: "card-fixed",
+                ...args.data,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }));
+            mocks.mockFsrsCard.update.mockResolvedValue({});
+        });
+
+        function expectDueDate(due: Date, daysFromNow: number) {
+            const expected = new Date();
+            expected.setDate(expected.getDate() + daysFromNow);
+            expected.setHours(6, 0, 0, 0);
+            expect(due.getTime()).toBe(expected.getTime());
+        }
+
+        // Test 1: Again → scheduled_days=1, due 1 day later 06:00
+        it("Again (1) → scheduled_days=1, due 1 day later at 06:00", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 1);
+            expect(result.scheduled_days).toBe(1);
+            expect(result.state).toBe("Relearning");
+            expect(result.lapses).toBe(1);
+            expect(result.reps).toBe(1);
+            expectDueDate(result.due, 1);
+        });
+
+        // Test 2: Hard → scheduled_days=2, due 2 days later 06:00
+        it("Hard (2) → scheduled_days=2, due 2 days later at 06:00", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 2);
+            expect(result.scheduled_days).toBe(2);
+            expect(result.state).toBe("Review");
+            expect(result.lapses).toBe(0);
+            expect(result.reps).toBe(1);
+            expectDueDate(result.due, 2);
+        });
+
+        // Test 3: Good → scheduled_days=5, due 5 days later 06:00
+        it("Good (3) → scheduled_days=5, due 5 days later at 06:00", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 3);
+            expect(result.scheduled_days).toBe(5);
+            expect(result.state).toBe("Review");
+            expect(result.reps).toBe(1);
+            expectDueDate(result.due, 5);
+        });
+
+        // Test 4: Easy first time → scheduled_days=7
+        it("Easy (4) first time (easyStreakCount=1) → scheduled_days=7", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 4, undefined, 1);
+            expect(result.scheduled_days).toBe(7);
+            expect(result.state).toBe("Review");
+            expect(result.reps).toBe(1);
+            expectDueDate(result.due, 7);
+        });
+
+        // Test 5: Easy second consecutive → scheduled_days=3
+        it("Easy (4) second consecutive (easyStreakCount=2) → scheduled_days=3", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 4, undefined, 2);
+            expect(result.scheduled_days).toBe(3);
+            expect(result.reps).toBe(1);
+            expectDueDate(result.due, 3);
+        });
+
+        // Test 6: Easy third consecutive → still updates FsrsCard, scheduled_days=3
+        it("Easy (4) third consecutive (easyStreakCount=3) → scheduled_days=3, FsrsCard updated", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 4, undefined, 3);
+            expect(result.scheduled_days).toBe(3);
+            expect(result.reps).toBe(1);
+            // FsrsCard is always updated — never deleted
+            expect(mocks.mockFsrsCard.update).toHaveBeenCalled();
+            expect(mocks.mockFsrsCard.delete).not.toHaveBeenCalled();
+        });
+
+        // Test 7: Good does NOT trigger mastery
+        it("Good (3) with easyStreakCount=0 → does NOT set mastery", async () => {
+            const result = await processFsrsReview(userId, errorItemId, 3);
+            expect(result.scheduled_days).toBe(5);
+            expect(result.state).toBe("Review");
+            // processFsrsReview itself never sets masteryLevel=2
+            // (that's the caller's job in route.ts)
+        });
+
+        // Test 8: lapses increments on Again
+        it("Again (1) should increment lapses", async () => {
+            // Simulate existing card with lapses=2
+            mocks.mockFsrsCard.findUnique.mockResolvedValue({
+                id: "card-lapsed",
+                userId,
+                errorItemId,
+                due: new Date(),
+                stability: 2.0,
+                difficulty: 0.3,
+                elapsed_days: 0,
+                scheduled_days: 1,
+                reps: 5,
+                lapses: 2,
+                state: "Review",
+                last_review: new Date(),
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+
+            const result = await processFsrsReview(userId, errorItemId, 1);
+            expect(result.lapses).toBe(3); // was 2, now +1
+            expect(result.reps).toBe(6);   // was 5, now +1
+        });
+
+        // Test 9: SIMILAR_QUESTION does not affect Easy streak (tested via route.ts)
+        //   — covered by practice test: "SIMILAR_QUESTION 不参与也不打断 Easy streak"
+
+        // Test 10: stability/difficulty are preserved
+        it("should preserve existing stability and difficulty values", async () => {
+            mocks.mockFsrsCard.findUnique.mockResolvedValue({
+                id: "card-preserve",
+                userId,
+                errorItemId,
+                due: new Date(),
+                stability: 4.2,
+                difficulty: 0.75,
+                elapsed_days: 3,
+                scheduled_days: 5,
+                reps: 8,
+                lapses: 1,
+                state: "Review",
+                last_review: new Date(),
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+
+            const result = await processFsrsReview(userId, errorItemId, 3);
+            expect(result.stability).toBe(4.2);
+            expect(result.difficulty).toBe(0.75);
+        });
+    });
 });
