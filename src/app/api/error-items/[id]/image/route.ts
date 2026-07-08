@@ -51,6 +51,20 @@ export async function GET(
     const dataUrlMatch = raw.match(/^data:(.+?);base64,(.*)$/);
     if (dataUrlMatch) {
         const [, mimeType, base64] = dataUrlMatch;
+
+        // Only allow known image types to prevent XSS / MIME abuse
+        // (e.g. data:text/html or data:application/javascript stored in DB).
+        const allowedMimeTypes = new Set([
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif",
+        ]);
+
+        if (!allowedMimeTypes.has(mimeType.toLowerCase())) {
+            return new NextResponse("Unsupported image format", { status: 415 });
+        }
+
         const buffer = Buffer.from(base64, "base64");
 
         return new Response(buffer, {
@@ -59,6 +73,7 @@ export async function GET(
                 "Content-Type": mimeType,
                 "Cache-Control": "private, max-age=86400",
                 "Content-Length": String(buffer.length),
+                "X-Content-Type-Options": "nosniff",
             },
         });
     }
