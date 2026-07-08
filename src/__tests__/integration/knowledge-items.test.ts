@@ -15,8 +15,10 @@ const mocks = vi.hoisted(() => ({
         findMany: vi.fn(),
         count: vi.fn(),
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
+        aggregate: vi.fn(),
     },
     mockSession: { user: { email: "user@test.com", id: "user-123" } },
 }));
@@ -85,6 +87,8 @@ describe("/api/knowledge-items", () => {
 
         it("creates successfully", async () => {
             mocks.mockPrismaSubject.findFirst.mockResolvedValue({ id: "s1" });
+            mocks.mockPrismaKnowledgeItem.aggregate.mockResolvedValue({ _max: { order: 5 } } as any);
+            mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]); // for source auto-suggest
             mocks.mockPrismaKnowledgeItem.create.mockResolvedValue({
                 id: "ki-1", userId: "user-123", subjectId: "s1", prompt: "p", answer: "a",
                 detail: null, deck: null, order: 0, tagId: null, questionType: "DICTATION",

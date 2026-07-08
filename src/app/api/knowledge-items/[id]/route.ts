@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
-import { unauthorized, badRequest, notFound, internalError } from "@/lib/api-errors";
+import { unauthorized, badRequest, notFound, internalError, conflict } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
 
 const logger = createLogger("api:knowledge-items:id");
@@ -91,11 +91,37 @@ export async function PUT(
         if (typeof detail !== "undefined") data.detail = typeof detail === "string" ? detail : null;
         if (typeof subjectId === "string") data.subjectId = subjectId;
         if (typeof deck !== "undefined") data.deck = typeof deck === "string" ? deck : null;
-        if (typeof order === "number") data.order = order;
+        if (typeof order === "number" && Number.isFinite(order)) data.order = order;
         if (typeof tagId === "string") data.tagId = tagId.length > 0 ? tagId : null;
         if (typeof questionType === "string") data.questionType = questionType;
         if (typeof source !== "undefined") data.source = typeof source === "string" ? source : null;
         if (typeof manualDifficulty !== "undefined") data.manualDifficulty = typeof manualDifficulty === "string" ? manualDifficulty : null;
+
+        // Soft duplicate check for source
+        if (typeof source === "string" && source.trim().length > 0) {
+            const effectiveDeck = typeof deck === "string" && deck.trim().length > 0 ? deck.trim() : "";
+            const existingForDuplicate = await prisma.knowledgeItem.findUnique({
+                where: { id },
+                select: { subjectId: true, deck: true, source: true },
+            });
+            const targetSubjectId = typeof subjectId === "string" ? subjectId : existingForDuplicate?.subjectId;
+            const targetDeck = typeof deck !== "undefined"
+                ? (typeof deck === "string" && deck.trim().length > 0 ? deck.trim() : null)
+                : (existingForDuplicate?.deck ?? null);
+            const duplicate = await prisma.knowledgeItem.findFirst({
+                where: {
+                    userId: user.id,
+                    subjectId: targetSubjectId ?? (existingForDuplicate?.subjectId ?? ""),
+                    deck: targetDeck,
+                    source: source.trim(),
+                    id: { not: id },
+                },
+                select: { id: true },
+            });
+            if (duplicate) {
+                return conflict("同一章节下已存在相同编号");
+            }
+        }
 
         const updated = await prisma.knowledgeItem.update({
             where: { id },

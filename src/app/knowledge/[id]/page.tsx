@@ -51,6 +51,8 @@ export default function KnowledgeDetailPage() {
     const [markUnknownLoading, setMarkUnknownLoading] = useState(false);
     const [markUnknownError, setMarkUnknownError] = useState<string | null>(null);
     const [markUnknownSuccess, setMarkUnknownSuccess] = useState<string | null>(null);
+    const [editSource, setEditSource] = useState("");
+    const [editOrder, setEditOrder] = useState("");
 
     const fetchItem = async () => {
         try {
@@ -71,6 +73,8 @@ export default function KnowledgeDetailPage() {
         setEditAnswer(item.answer);
         setEditDetail(item.detail || "");
         setEditDeck(item.deck || "");
+        setEditSource(item.source || "");
+        setEditOrder(item.order != null ? String(item.order) : "");
         setEditError(null);
         setEditing(true);
     };
@@ -86,6 +90,8 @@ export default function KnowledgeDetailPage() {
                 answer: editAnswer.trim(),
                 detail: editDetail || null,
                 deck: editDeck || null,
+                source: editSource.trim() || null,
+                order: editOrder.trim() ? parseInt(editOrder, 10) : undefined,
             });
             setItem(updated);
             setEditing(false);
@@ -187,6 +193,16 @@ export default function KnowledgeDetailPage() {
                                     <label className="text-sm font-medium">分组</label>
                                     <Input value={editDeck} onChange={e => setEditDeck(e.target.value)} />
                                 </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-sm font-medium">编号</label>
+                                        <Input value={editSource} onChange={e => setEditSource(e.target.value)} placeholder="例如 MFD-15" />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium">排序</label>
+                                        <Input type="number" value={editOrder} onChange={e => setEditOrder(e.target.value)} placeholder="0" />
+                                    </div>
+                                </div>
                                 <div className="flex gap-2">
                                     <Button onClick={handleSave}><Save className="mr-1 h-4 w-4" />保存</Button>
                                     <Button variant="outline" onClick={() => setEditing(false)}>取消</Button>
@@ -209,6 +225,7 @@ export default function KnowledgeDetailPage() {
                                     </div>
                                 )}
                                 <div className="flex flex-wrap gap-2">
+                                    {item.source && <Badge variant="outline" className="font-mono">#{item.source}</Badge>}
                                     {item.subject && <Badge variant="secondary">{item.subject.name}</Badge>}
                                     {item.deck && <Badge variant="outline">{item.deck}</Badge>}
                                     {item.tag && <Badge variant="outline">{item.tag.name}</Badge>}

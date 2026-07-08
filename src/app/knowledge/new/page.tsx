@@ -17,6 +17,8 @@ export default function NewKnowledgePage() {
     const [detail, setDetail] = useState("");
     const [deck, setDeck] = useState("");
     const [tagId, setTagId] = useState("");
+    const [source, setSource] = useState("");
+    const [order, setOrder] = useState("");
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +44,8 @@ export default function NewKnowledgePage() {
             if (detail) item.detail = detail;
             if (deck) item.deck = deck;
             if (tagId) item.tagId = tagId;
+            if (source.trim()) item.source = source.trim();
+            if (order.trim()) item.order = parseInt(order, 10);
             const created = await apiClient.post<{ id: string }>("/api/knowledge-items", item);
             router.push(`/knowledge/${created.id}`);
         } catch (err: any) {
@@ -67,6 +71,26 @@ export default function NewKnowledgePage() {
                             </SelectContent>
                         </Select>
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-medium">分组 / 章节</label>
+                            <Input value={deck} onChange={e => setDeck(e.target.value)} placeholder="例如：八上-勾股定理" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">编号</label>
+                            <Input value={source} onChange={e => setSource(e.target.value)} placeholder="留空自动生成" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm font-medium">排序</label>
+                            <Input type="number" value={order} onChange={e => setOrder(e.target.value)} placeholder="留空排末尾" />
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium">知识点标签 ID</label>
+                            <Input value={tagId} onChange={e => setTagId(e.target.value)} placeholder="KnowledgeTag ID" />
+                        </div>
+                    </div>
                     <div>
                         <label className="text-sm font-medium">题目 / 提示 *</label>
                         <Input value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="例如：默写勾股定理" />
@@ -78,16 +102,6 @@ export default function NewKnowledgePage() {
                     <div>
                         <label className="text-sm font-medium">解析</label>
                         <Textarea value={detail} onChange={e => setDetail(e.target.value)} placeholder="可选，支持 Markdown / LaTeX" rows={3} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-sm font-medium">分组 / 章节</label>
-                            <Input value={deck} onChange={e => setDeck(e.target.value)} placeholder="例如：八上-勾股定理" />
-                        </div>
-                        <div>
-                            <label className="text-sm font-medium">知识点标签 ID</label>
-                            <Input value={tagId} onChange={e => setTagId(e.target.value)} placeholder="KnowledgeTag ID" />
-                        </div>
                     </div>
                     <div className="flex gap-2">
                         <Button onClick={handleSave} disabled={saving}>
