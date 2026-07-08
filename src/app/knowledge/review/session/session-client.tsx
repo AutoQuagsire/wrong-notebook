@@ -275,9 +275,9 @@ export default function KnowledgeReviewSessionClient() {
                             <Card key={result.knowledgeItemId}>
                                 <CardContent className="pt-4">
                                     <div className="flex items-start justify-between gap-2">
-                                        <p className="font-medium text-sm flex-1">
-                                            {index + 1}. {result.prompt}
-                                        </p>
+                                        <div className="font-medium text-sm flex-1 [&_p]:m-0 [&_.katex]:text-sm">
+                                            <MarkdownRenderer content={`${index + 1}. ${result.prompt}`} />
+                                        </div>
                                         <Badge
                                             variant={
                                                 result.rating === 1

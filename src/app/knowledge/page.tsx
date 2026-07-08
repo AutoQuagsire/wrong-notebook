@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Brain, Search, Upload } from "lucide-react";
+import { MarkdownRenderer } from "@/components/markdown-renderer";
 
 interface KnowledgeItemSummary {
     id: string;
@@ -117,7 +118,9 @@ export default function KnowledgeListPage() {
                             <Link key={item.id} href={`/knowledge/${item.id}`}>
                                 <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
                                     <CardContent className="pt-4">
-                                        <p className="font-medium line-clamp-2 mb-2">{item.prompt}</p>
+                                        <div className="font-medium line-clamp-2 mb-2 [&_p]:m-0 [&_.katex]:text-sm">
+                                            <MarkdownRenderer content={item.prompt} />
+                                        </div>
                                         <div className="flex flex-wrap gap-1 mb-2">
                                             {item.subject && (
                                                 <Badge variant="secondary" className="text-xs">{item.subject.name}</Badge>
