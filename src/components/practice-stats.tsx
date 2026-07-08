@@ -86,16 +86,18 @@ export function PracticeStats() {
         );
     }
 
+    const practiceOverview = stats?.practiceOverview ?? { totalPracticeCount: 0, todayPracticeCount: 0 };
     const subjectStats = stats?.subjectStats ?? [];
     const activityStats = stats?.activityStats ?? [];
     const overallStats = stats?.overallStats ?? { total: 0, correct: 0, rate: "0.0" };
     const weeklyPracticeStats = stats?.weeklyPracticeStats ?? [];
     const difficultyStats = stats?.difficultyStats ?? [];
 
+    const hasOverviewData = practiceOverview.totalPracticeCount > 0 || practiceOverview.todayPracticeCount > 0;
     const hasActivityData = activityStats.length > 0 && activityStats.some(d => d.total > 0);
     const hasWeeklyData = weeklyPracticeStats.length > 0 && weeklyPracticeStats.some(d => d.total > 0);
     const hasCorrectnessData = overallStats.total > 0;
-    const hasAnyStatsData = hasActivityData || hasWeeklyData || hasCorrectnessData;
+    const hasAnyStatsData = hasOverviewData || hasActivityData || hasWeeklyData || hasCorrectnessData;
 
     if (!hasAnyStatsData) {
         return (
@@ -155,15 +157,27 @@ export function PracticeStats() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">
-                            {t.stats?.totalPractices || "Total Practiced"}
+                            累计练习
                         </CardTitle>
                         <BookOpen className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{overallStats.total}</div>
+                        <div className="text-2xl font-bold">{practiceOverview.totalPracticeCount}</div>
+                        <p className="text-xs text-muted-foreground">题</p>
                     </CardContent>
                 </Card>
-            {hasCorrectnessData ? (
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">
+                            今日练习
+                        </CardTitle>
+                        <Target className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{practiceOverview.todayPracticeCount}</div>
+                        <p className="text-xs text-muted-foreground">题</p>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">
@@ -172,24 +186,21 @@ export function PracticeStats() {
                         <Target className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{Number(overallStats.rate).toFixed(1)}%</div>
-                        <p className="text-xs text-muted-foreground">
-                            {overallStats.correct} / {overallStats.total} 题正确
-                        </p>
+                        {hasCorrectnessData ? (
+                            <>
+                                <div className="text-2xl font-bold">{Number(overallStats.rate).toFixed(1)}%</div>
+                                <p className="text-xs text-muted-foreground">
+                                    {overallStats.correct} / {overallStats.total} 题正确
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <div className="text-2xl font-bold text-muted-foreground">—</div>
+                                <p className="text-xs text-muted-foreground">暂无相似题正确率数据</p>
+                            </>
+                        )}
                     </CardContent>
                 </Card>
-            ) : (
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">相似题正确率</CardTitle>
-                        <Target className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-muted-foreground">—</div>
-                        <p className="text-xs text-muted-foreground">暂无相似题正确率数据</p>
-                    </CardContent>
-                </Card>
-            )}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

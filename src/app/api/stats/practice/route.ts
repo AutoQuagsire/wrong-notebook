@@ -18,6 +18,21 @@ export async function GET(req: Request) {
     const userId = session.user.id;
 
     try {
+        // 0. Practice overview — all records, no filter
+        const todayStart = startOfDay(new Date());
+        const todayEnd = new Date(todayStart);
+        todayEnd.setDate(todayEnd.getDate() + 1);
+
+        const [totalPracticeCount, todayPracticeCount] = await Promise.all([
+            prisma.practiceRecord.count({ where: { userId } }),
+            prisma.practiceRecord.count({
+                where: {
+                    userId,
+                    createdAt: { gte: todayStart, lt: todayEnd },
+                },
+            }),
+        ]);
+
         // 1. Subject Distribution — only current active subjects
         const activeSubjects = await prisma.subject.findMany({
             where: { userId },
@@ -126,6 +141,10 @@ export async function GET(req: Request) {
         });
 
         return NextResponse.json({
+            practiceOverview: {
+                totalPracticeCount,
+                todayPracticeCount,
+            },
             subjectStats,
             activityStats: chartData,
             difficultyStats: difficultyStats.map(s => ({ name: s.difficulty || 'Unknown', value: s._count.id })),

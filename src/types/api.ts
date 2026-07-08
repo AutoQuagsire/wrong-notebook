@@ -148,6 +148,7 @@ export interface AnalyticsData {
 }
 
 export interface PracticeStatsData {
+    practiceOverview: { totalPracticeCount: number; todayPracticeCount: number };
     subjectStats: { name: string; value: number }[];
     activityStats: { date: string; total: number; correct: number;[key: string]: number | string }[];
     difficultyStats: { name: string; value: number }[];
