@@ -23,18 +23,24 @@ export async function GET(req: Request) {
             where: { userId }
         });
 
-        // 2. Mastered Count
+        // 2. Mastered Count — strictly masteryLevel === 2
         const masteredCount = await prisma.errorItem.count({
             where: {
                 userId,
-                masteryLevel: { gt: 0 }
+                masteryLevel: 2,
             }
         });
 
         // 3. Mastery Rate
         const masteryRate = totalErrors > 0 ? ((masteredCount / totalErrors) * 100).toFixed(1) : 0;
 
-        // 4. Subject Distribution - Get error items grouped by subject
+        // 4. Subject Distribution — only current active subjects
+        const activeSubjects = await prisma.subject.findMany({
+            where: { userId },
+            select: { name: true },
+        });
+        const activeSubjectNames = new Set(activeSubjects.map(s => s.name));
+
         const errorItemsWithSubject = await prisma.errorItem.findMany({
             where: { userId },
             include: {
@@ -44,8 +50,11 @@ export async function GET(req: Request) {
 
         const subjectMap = new Map<string, number>();
         errorItemsWithSubject.forEach(item => {
-            const subjectName = item.subject?.name || 'Unknown';
-            subjectMap.set(subjectName, (subjectMap.get(subjectName) || 0) + 1);
+            const subjectName = item.subject?.name;
+            // Only count subjects that still exist for the user
+            if (subjectName && activeSubjectNames.has(subjectName)) {
+                subjectMap.set(subjectName, (subjectMap.get(subjectName) || 0) + 1);
+            }
         });
 
         const subjectStats = Array.from(subjectMap.entries()).map(([name, value]) => ({

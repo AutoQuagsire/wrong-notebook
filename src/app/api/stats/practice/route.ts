@@ -18,14 +18,22 @@ export async function GET(req: Request) {
     const userId = session.user.id;
 
     try {
-        // 1. Subject Distribution
-        const subjectStats = await prisma.practiceRecord.groupBy({
+        // 1. Subject Distribution — only current active subjects
+        const activeSubjects = await prisma.subject.findMany({
+            where: { userId },
+            select: { id: true, name: true },
+        });
+        const activeSubjectNames = new Set(activeSubjects.map(s => s.name));
+
+        const rawSubjectStats = await prisma.practiceRecord.groupBy({
             by: ['subject'],
             where: { userId },
-            _count: {
-                id: true
-            }
+            _count: { id: true },
         });
+
+        const subjectStats = rawSubjectStats
+            .filter(s => s.subject && activeSubjectNames.has(s.subject))
+            .map(s => ({ name: s.subject!, value: s._count.id }));
 
         // 2. Monthly Activity (Last 6 months)
         const sixMonthsAgo = subMonths(new Date(), 5);
@@ -80,20 +88,22 @@ export async function GET(req: Request) {
             }
         });
 
-        // 4. Overall Correctness
-        const totalRecords = await prisma.practiceRecord.count({ where: { userId } });
+        // 4. Overall Correctness — only records with explicit boolean isCorrect
+        const correctableRecords = await prisma.practiceRecord.count({
+            where: { userId, isCorrect: { not: null } },
+        });
         const correctRecords = await prisma.practiceRecord.count({
-            where: { userId, isCorrect: true }
+            where: { userId, isCorrect: true },
         });
 
         return NextResponse.json({
-            subjectStats: subjectStats.map(s => ({ name: s.subject || 'Unknown', value: s._count.id })),
+            subjectStats,
             activityStats: chartData,
             difficultyStats: difficultyStats.map(s => ({ name: s.difficulty || 'Unknown', value: s._count.id })),
             overallStats: {
-                total: totalRecords,
+                total: correctableRecords,
                 correct: correctRecords,
-                rate: totalRecords > 0 ? (correctRecords / totalRecords * 100).toFixed(1) : 0
+                rate: correctableRecords > 0 ? (correctRecords / correctableRecords * 100).toFixed(1) : 0
             }
         });
 

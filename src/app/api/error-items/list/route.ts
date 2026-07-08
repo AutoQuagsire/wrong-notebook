@@ -61,9 +61,9 @@ export async function GET(req: Request) {
             });
         }
 
-        // Mastery filter
+        // Mastery filter: mastered = only masteryLevel 2, unmastered = 0 or 1
         if (mastery !== null) {
-            whereClause.masteryLevel = mastery === "1" ? { gt: 0 } : 0;
+            whereClause.masteryLevel = mastery === "2" ? 2 : { not: 2 };
         }
 
         // Time range filter
