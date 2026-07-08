@@ -14,6 +14,7 @@ interface SessionItem {
     promptPreview: string;
     answer: string;
     detail: string | null;
+    source?: string | null;
     subject: { id: string; name: string } | null;
     tag: { id: string; name: string } | null;
     due?: string;
@@ -355,6 +356,9 @@ export default function KnowledgeReviewSessionClient() {
                     <Card>
                         <CardHeader>
                             <div className="flex flex-wrap gap-2">
+                                {currentItem.source && (
+                                    <Badge variant="outline" className="font-mono text-xs">#{currentItem.source}</Badge>
+                                )}
                                 {currentItem.subject && (
                                     <Badge variant="secondary" className="text-xs">
                                         {currentItem.subject.name}
@@ -462,6 +466,9 @@ export default function KnowledgeReviewSessionClient() {
                                     <div>
                                         <CardTitle className="text-base">第 {index + 1} 条</CardTitle>
                                         <div className="flex flex-wrap gap-2 mt-2">
+                                            {item.source && (
+                                                <Badge variant="outline" className="font-mono text-xs">#{item.source}</Badge>
+                                            )}
                                             {item.subject && (
                                                 <Badge variant="secondary" className="text-xs">
                                                     {item.subject.name}

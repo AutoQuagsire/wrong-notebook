@@ -17,6 +17,7 @@ interface KnowledgeItemSummary {
     answer: string;
     deck: string | null;
     order: number;
+    source: string | null;
     tag: { id: string; name: string; subject: string } | null;
     subject: { id: string; name: string } | null;
     questionType: string | null;
@@ -122,6 +123,9 @@ export default function KnowledgeListPage() {
                                             <MarkdownRenderer content={item.prompt} />
                                         </div>
                                         <div className="flex flex-wrap gap-1 mb-2">
+                                            {item.source && (
+                                                <Badge variant="outline" className="font-mono text-xs">#{item.source}</Badge>
+                                            )}
                                             {item.subject && (
                                                 <Badge variant="secondary" className="text-xs">{item.subject.name}</Badge>
                                             )}

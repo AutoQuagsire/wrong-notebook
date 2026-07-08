@@ -30,6 +30,7 @@ export interface KnowledgeReviewTodayItem {
     detail: string | null;
     subject: { id: string; name: string } | null;
     tag: { id: string; name: string } | null;
+    source?: string | null;
     due?: string;
     lastReview?: string | null;
     reps?: number;
@@ -82,6 +83,7 @@ export async function getKnowledgeTodayReviewList(
                     prompt: true,
                     answer: true,
                     detail: true,
+                    source: true,
                     subject: { select: { id: true, name: true } },
                     tag: { select: { id: true, name: true } },
                 },
@@ -95,6 +97,7 @@ export async function getKnowledgeTodayReviewList(
         promptPreview: buildPromptPreview(s.knowledgeItem.prompt),
         answer: s.knowledgeItem.answer,
         detail: s.knowledgeItem.detail,
+        source: s.knowledgeItem.source,
         subject: s.knowledgeItem.subject,
         tag: s.knowledgeItem.tag,
         due: s.due.toISOString(),
@@ -169,6 +172,7 @@ export async function getKnowledgeTodayReviewList(
                 prompt: true,
                 answer: true,
                 detail: true,
+                source: true,
                 subject: { select: { id: true, name: true } },
                 tag: { select: { id: true, name: true } },
             },
@@ -179,6 +183,7 @@ export async function getKnowledgeTodayReviewList(
             promptPreview: buildPromptPreview(item.prompt),
             answer: item.answer,
             detail: item.detail,
+            source: item.source,
             subject: item.subject,
             tag: item.tag,
         }));
