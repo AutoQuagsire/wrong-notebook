@@ -110,7 +110,7 @@ export async function GET(req: Request) {
             overallStats: {
                 total: correctableRecords,
                 correct: correctRecords,
-                rate: correctableRecords > 0 ? (correctRecords / correctableRecords * 100).toFixed(1) : 0
+                rate: correctableRecords > 0 ? (correctRecords / correctableRecords * 100).toFixed(1) : "0.0",
             }
         });
 

@@ -78,8 +78,21 @@ export function PracticeStats() {
         );
     }
 
-    if (!stats || stats.overallStats.total === 0) {
-        return null; // Don't show if no data
+    if (!stats) {
+        return (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-muted-foreground">练习统计加载失败，请稍后重试</p>
+            </div>
+        );
+    }
+
+    if (stats.overallStats.total === 0) {
+        return (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-muted-foreground">暂无练习数据</p>
+                <p className="text-sm text-muted-foreground">完成相似题练习后会在这里展示统计</p>
+            </div>
+        );
     }
 
     // Helper to translate difficulty
@@ -116,7 +129,7 @@ export function PracticeStats() {
                         <Target className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats.overallStats.rate}%</div>
+                        <div className="text-2xl font-bold">{Number(stats.overallStats.rate).toFixed(1)}%</div>
                         <p className="text-xs text-muted-foreground">
                             {stats.overallStats.correct} / {stats.overallStats.total} {t.stats?.correct || "Correct"}
                         </p>
