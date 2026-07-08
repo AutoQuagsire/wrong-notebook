@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { Loader2, TrendingUp, BookOpen, Target } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Loader2, BookOpen, Target } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { PracticeStatsData } from "@/types/api";
 
@@ -88,14 +88,14 @@ export function PracticeStats() {
 
     const subjectStats = stats?.subjectStats ?? [];
     const activityStats = stats?.activityStats ?? [];
-    const difficultyStats = stats?.difficultyStats ?? [];
     const overallStats = stats?.overallStats ?? { total: 0, correct: 0, rate: "0.0" };
+    const weeklyPracticeStats = stats?.weeklyPracticeStats ?? [];
+    const difficultyStats = stats?.difficultyStats ?? [];
 
-    const hasActivityData = activityStats.length > 0;
-    const hasSubjectData = subjectStats.length > 0;
-    const hasDifficultyData = difficultyStats.length > 0;
+    const hasActivityData = activityStats.length > 0 && activityStats.some(d => d.total > 0);
+    const hasWeeklyData = weeklyPracticeStats.length > 0 && weeklyPracticeStats.some(d => d.total > 0);
     const hasCorrectnessData = overallStats.total > 0;
-    const hasAnyStatsData = hasActivityData || hasSubjectData || hasDifficultyData || hasCorrectnessData;
+    const hasAnyStatsData = hasActivityData || hasWeeklyData || hasCorrectnessData;
 
     if (!hasAnyStatsData) {
         return (
@@ -106,14 +106,45 @@ export function PracticeStats() {
         );
     }
 
-    // Helper to translate difficulty
-    const getDifficultyLabel = (key: string) => {
-        // @ts-expect-error — translation object has dynamic nested keys
-        return t.practice?.difficulty?.[key] || key;
+    // Get unique difficulties for the bar chart
+    const difficulties = difficultyStats.map(d => d.name);
+
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+    const DIFFICULTY_COLORS: Record<string, string> = {
+        'easy': '#4ade80',
+        'medium': '#facc15',
+        'hard': '#fb923c',
+        'harder': '#f87171',
+        'Unknown': '#94a3b8'
     };
 
-    // Get unique difficulties for the bar chart
-    const difficulties = stats.difficultyStats.map(d => d.name);
+    const CustomTooltip = ({ active, payload, label }: {
+        active?: boolean;
+        payload?: { name: string; value: number; color: string }[];
+        label?: string;
+    }) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-background border rounded-lg shadow-lg p-3 text-sm">
+                    <p className="font-medium mb-2">{label}</p>
+                    {payload.map((entry, index: number) => (
+                        <div key={index} className="flex items-center gap-2 mb-1 last:mb-0">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                            <span className="text-muted-foreground">{entry.name}:</span>
+                            <span className="font-medium">{entry.value}</span>
+                        </div>
+                    ))}
+                    <div className="mt-2 pt-2 border-t flex justify-between gap-4">
+                        <span className="text-muted-foreground">Total:</span>
+                        <span className="font-bold">
+                            {payload.reduce((acc: number, curr) => acc + (typeof curr.value === 'number' ? curr.value : 0), 0)}
+                        </span>
+                    </div>
+                </div>
+            );
+        }
+        return null;
+    };
 
     return (
         <div className="space-y-6">
@@ -162,49 +193,74 @@ export function PracticeStats() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-                {hasSubjectData ? (
+                {/* Weekly Practice (last 7 days) */}
+                {hasWeeklyData ? (
                 <Card className="col-span-2 md:col-span-1">
                     <CardHeader>
-                        <CardTitle>{t.stats?.subjectDistribution || "Subject Distribution"}</CardTitle>
+                        <CardTitle>最近一周练习</CardTitle>
                     </CardHeader>
                     <CardContent className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={subjectStats}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    fill="#8884d8"
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                                >
-                                    {subjectStats.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
+                            <BarChart data={weeklyPracticeStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                                <XAxis
+                                    dataKey="label"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                                    dy={10}
+                                />
+                                <YAxis
+                                    allowDecimals={false}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#6b7280', fontSize: 12 }}
+                                />
+                                <Tooltip
+                                    content={({ active, payload, label }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="bg-background border rounded-lg shadow-lg p-3 text-sm">
+                                                    <p className="font-medium mb-1">{label}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                                                        <span className="text-muted-foreground">练习数:</span>
+                                                        <span className="font-bold">{payload[0].value}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                    cursor={{ fill: 'transparent' }}
+                                />
+                                <Bar
+                                    dataKey="total"
+                                    name="练习数"
+                                    fill="#3b82f6"
+                                    radius={[4, 4, 0, 0]}
+                                    barSize={28}
+                                />
+                            </BarChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
             ) : (
                 <Card className="col-span-2 md:col-span-1">
                     <CardHeader>
-                        <CardTitle>{t.stats?.subjectDistribution || "Subject Distribution"}</CardTitle>
+                        <CardTitle>最近一周练习</CardTitle>
                     </CardHeader>
                     <CardContent className="flex items-center justify-center h-[300px] text-muted-foreground">
-                        <p>暂无学科分布数据</p>
+                        <p>最近一周暂无练习记录</p>
                     </CardContent>
                 </Card>
             )}
 
+                {/* Monthly Activity — total only, no difficulty stack */}
                 {hasActivityData ? (
                 <Card className="col-span-2 md:col-span-1">
                     <CardHeader>
-                        <CardTitle>{t.stats?.weeklyTrend || "Monthly Trend"}</CardTitle>
+                        <CardTitle>月度练习活动</CardTitle>
                     </CardHeader>
                     <CardContent className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
@@ -223,23 +279,31 @@ export function PracticeStats() {
                                     tickLine={false}
                                     tick={{ fill: '#6b7280', fontSize: 12 }}
                                 />
-                                <Tooltip content={<CustomTooltip t={t} />} cursor={{ fill: 'transparent' }} />
-                                <Legend
-                                    iconType="circle"
-                                    iconSize={8}
-                                    wrapperStyle={{ paddingTop: '20px' }}
+                                <Tooltip
+                                    content={({ active, payload, label }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="bg-background border rounded-lg shadow-lg p-3 text-sm">
+                                                    <p className="font-medium mb-1">{label}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-violet-500" />
+                                                        <span className="text-muted-foreground">练习次数:</span>
+                                                        <span className="font-bold">{payload[0].value}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                    cursor={{ fill: 'transparent' }}
                                 />
-                                {difficulties.map((diff, index) => (
-                                    <Bar
-                                        key={diff}
-                                        dataKey={diff}
-                                        name={getDifficultyLabel(diff)}
-                                        stackId="a"
-                                        fill={DIFFICULTY_COLORS[diff] || COLORS[index % COLORS.length]}
-                                        radius={index === difficulties.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                                        barSize={32}
-                                    />
-                                ))}
+                                <Bar
+                                    dataKey="total"
+                                    name="练习次数"
+                                    fill="#8b5cf6"
+                                    radius={[4, 4, 0, 0]}
+                                    barSize={32}
+                                />
                             </BarChart>
                         </ResponsiveContainer>
                     </CardContent>
@@ -247,7 +311,7 @@ export function PracticeStats() {
             ) : (
                 <Card className="col-span-2 md:col-span-1">
                     <CardHeader>
-                        <CardTitle>{t.stats?.weeklyTrend || "Monthly Trend"}</CardTitle>
+                        <CardTitle>月度练习活动</CardTitle>
                     </CardHeader>
                     <CardContent className="flex items-center justify-center h-[300px] text-muted-foreground">
                         <p>暂无练习活动数据</p>

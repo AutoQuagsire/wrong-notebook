@@ -151,6 +151,7 @@ export interface PracticeStatsData {
     subjectStats: { name: string; value: number }[];
     activityStats: { date: string; total: number; correct: number;[key: string]: number | string }[];
     difficultyStats: { name: string; value: number }[];
+    weeklyPracticeStats: { date: string; label: string; total: number }[];
     overallStats: { total: number; correct: number; rate: string };
 }
 

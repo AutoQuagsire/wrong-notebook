@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
-import { startOfMonth, subMonths, format } from "date-fns";
+import { startOfMonth, subMonths, format, startOfDay, subDays } from "date-fns";
 import { unauthorized, internalError } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
 
@@ -92,7 +92,29 @@ export async function GET(req: Request) {
             }
         });
 
-        // 4. Overall Correctness — only SIMILAR_QUESTION records with explicit boolean isCorrect.
+        // 4. Weekly practice (last 7 days, daily counts, all practice types)
+        const weeklyPracticeStats: { date: string; label: string; total: number }[] = [];
+        for (let i = 6; i >= 0; i--) {
+            const dayStart = startOfDay(subDays(new Date(), i));
+            const dayEnd = new Date(dayStart);
+            dayEnd.setDate(dayEnd.getDate() + 1);
+            const count = await prisma.practiceRecord.count({
+                where: {
+                    userId,
+                    createdAt: {
+                        gte: dayStart,
+                        lt: dayEnd,
+                    },
+                },
+            });
+            weeklyPracticeStats.push({
+                date: format(dayStart, 'yyyy-MM-dd'),
+                label: format(dayStart, 'MM-dd'),
+                total: count,
+            });
+        }
+
+        // 5. Overall Correctness — only SIMILAR_QUESTION records with explicit boolean isCorrect.
         // ORIGINAL_REVIEW rating is a mastery self-assessment (Again/Hard/Good/Easy),
         // not an objective right/wrong judgment, so it is excluded from accuracy stats.
         const ACCURACY_PRACTICE_TYPE = "SIMILAR_QUESTION";
@@ -107,6 +129,7 @@ export async function GET(req: Request) {
             subjectStats,
             activityStats: chartData,
             difficultyStats: difficultyStats.map(s => ({ name: s.difficulty || 'Unknown', value: s._count.id })),
+            weeklyPracticeStats,
             overallStats: {
                 total: correctableRecords,
                 correct: correctRecords,
