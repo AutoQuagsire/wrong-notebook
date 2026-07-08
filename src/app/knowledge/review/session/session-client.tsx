@@ -5,7 +5,6 @@ import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { ArrowLeft, RotateCcw } from "lucide-react";
@@ -67,7 +66,6 @@ export default function KnowledgeReviewSessionClient() {
     const [loading, setLoading] = useState(true);
     const [phase, setPhase] = useState<Phase>("answering");
     const [ratingIndex, setRatingIndex] = useState(0);
-    const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
     const [lockedAnswers, setLockedAnswers] = useState<Record<string, string>>({});
     const [results, setResults] = useState<SessionResult[]>([]);
     const [submitting, setSubmitting] = useState(false);
@@ -88,7 +86,6 @@ export default function KnowledgeReviewSessionClient() {
             setItems(sessionItems);
             setPhase("answering");
             setRatingIndex(0);
-            setAnswerDrafts({});
             setLockedAnswers({});
             setResults([]);
             answeringStartedAtRef.current = Date.now();
@@ -120,19 +117,12 @@ export default function KnowledgeReviewSessionClient() {
         easy: results.filter((item) => item.rating === 4).length,
     }), [results]);
 
-    const updateAnswerDraft = (knowledgeItemId: string, value: string) => {
-        setAnswerDrafts((prev) => ({
-            ...prev,
-            [knowledgeItemId]: value,
-        }));
-    };
-
     const handleFinishAnswering = () => {
         answeringDurationRef.current = Math.max(
             0,
             Math.floor((Date.now() - answeringStartedAtRef.current) / 1000)
         );
-        setLockedAnswers(answerDrafts);
+        setLockedAnswers({});
         setRatingIndex(0);
         setError(null);
         setPhase("rating");
@@ -173,10 +163,13 @@ export default function KnowledgeReviewSessionClient() {
 
             setResults(nextResults);
 
-            if (ratingIndex + 1 >= items.length) {
+            const nextIndex = ratingIndex + 1;
+
+            if (nextIndex >= items.length) {
                 setPhase("done");
             } else {
-                setRatingIndex((prev) => prev + 1);
+                setRatingIndex(nextIndex);
+                setPhase("rating");
             }
         } catch (err: unknown) {
             const msg = (err as { message?: string })?.message || "提交失败";
@@ -323,6 +316,24 @@ export default function KnowledgeReviewSessionClient() {
         );
     }
 
+    if (phase === "rating" && !currentItem) {
+        return (
+            <main className="min-h-screen p-4 md:p-8 bg-background">
+                <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
+                    <p className="text-muted-foreground">当前评分题目加载失败，请重新开始本轮抽背。</p>
+                    <div className="flex justify-center gap-2">
+                        <Button type="button" onClick={handleRestart} variant="outline">
+                            <RotateCcw className="mr-1 h-4 w-4" />再来一组
+                        </Button>
+                        <Link href="/knowledge/review">
+                            <Button type="button" variant="outline">返回今日复习</Button>
+                        </Link>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
     if (phase === "rating" && currentItem) {
         return (
             <main className="min-h-screen p-4 md:p-8 bg-background">
@@ -335,7 +346,7 @@ export default function KnowledgeReviewSessionClient() {
                             </p>
                         </div>
                         <Link href="/knowledge/review">
-                            <Button variant="outline" size="sm">
+                            <Button type="button" variant="outline" size="sm">
                                 <ArrowLeft className="mr-1 h-4 w-4" />返回今日复习
                             </Button>
                         </Link>
@@ -406,6 +417,7 @@ export default function KnowledgeReviewSessionClient() {
                                 {ratingOptions.map((option) => (
                                     <Button
                                         key={option.value}
+                                        type="button"
                                         variant={option.variant}
                                         className="h-auto py-3 text-sm"
                                         disabled={submitting}
@@ -435,11 +447,11 @@ export default function KnowledgeReviewSessionClient() {
                             本轮共 {items.length} 条，默写完成后再逐个评分
                         </p>
                     </div>
-                    <Link href="/knowledge/review">
-                        <Button variant="outline" size="sm">
-                            <ArrowLeft className="mr-1 h-4 w-4" />返回今日复习
-                        </Button>
-                    </Link>
+                        <Link href="/knowledge/review">
+                            <Button type="button" variant="outline" size="sm">
+                                <ArrowLeft className="mr-1 h-4 w-4" />返回今日复习
+                            </Button>
+                        </Link>
                 </div>
 
                 <div className="space-y-4">
@@ -477,22 +489,13 @@ export default function KnowledgeReviewSessionClient() {
                                     <p className="text-sm text-muted-foreground">题目 / 提示</p>
                                     <MarkdownRenderer content={item.promptPreview} />
                                 </div>
-                                <div className="space-y-2">
-                                    <p className="text-sm text-muted-foreground">我的默写</p>
-                                    <Textarea
-                                        value={answerDrafts[item.knowledgeItemId] ?? ""}
-                                        onChange={(event) => updateAnswerDraft(item.knowledgeItemId, event.target.value)}
-                                        placeholder="可选：写下你的默写内容，也可以留空。"
-                                        rows={4}
-                                    />
-                                </div>
                             </CardContent>
                         </Card>
                     ))}
                 </div>
 
                 <div className="flex justify-center">
-                    <Button onClick={handleFinishAnswering} size="lg">
+                    <Button type="button" onClick={handleFinishAnswering} size="lg">
                         默写完成，开始评分
                     </Button>
                 </div>
