@@ -86,11 +86,22 @@ export function PracticeStats() {
         );
     }
 
-    if (stats.overallStats.total === 0) {
+    const subjectStats = stats?.subjectStats ?? [];
+    const activityStats = stats?.activityStats ?? [];
+    const difficultyStats = stats?.difficultyStats ?? [];
+    const overallStats = stats?.overallStats ?? { total: 0, correct: 0, rate: "0.0" };
+
+    const hasActivityData = activityStats.length > 0;
+    const hasSubjectData = subjectStats.length > 0;
+    const hasDifficultyData = difficultyStats.length > 0;
+    const hasCorrectnessData = overallStats.total > 0;
+    const hasAnyStatsData = hasActivityData || hasSubjectData || hasDifficultyData || hasCorrectnessData;
+
+    if (!hasAnyStatsData) {
         return (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
-                <p className="text-muted-foreground">暂无练习数据</p>
-                <p className="text-sm text-muted-foreground">完成相似题练习后会在这里展示统计</p>
+                <p className="text-muted-foreground">暂无练习统计数据</p>
+                <p className="text-sm text-muted-foreground">完成原题复习或相似题练习后会在这里展示统计</p>
             </div>
         );
     }
@@ -118,38 +129,40 @@ export function PracticeStats() {
                         <BookOpen className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats.overallStats.total}</div>
+                        <div className="text-2xl font-bold">{overallStats.total}</div>
                     </CardContent>
                 </Card>
+            {hasCorrectnessData ? (
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">
-                            {t.stats?.correctRate || "Correct Rate"}
+                            相似题正确率
                         </CardTitle>
                         <Target className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{Number(stats.overallStats.rate).toFixed(1)}%</div>
+                        <div className="text-2xl font-bold">{Number(overallStats.rate).toFixed(1)}%</div>
                         <p className="text-xs text-muted-foreground">
-                            {stats.overallStats.correct} / {stats.overallStats.total} {t.stats?.correct || "Correct"}
+                            {overallStats.correct} / {overallStats.total} 题正确
                         </p>
                     </CardContent>
                 </Card>
+            ) : (
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">
-                            {t.stats?.activeDays || "Active Days (6m)"}
-                        </CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-sm font-medium">相似题正确率</CardTitle>
+                        <Target className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats.activityStats.filter(d => d.total > 0).length}</div>
+                        <div className="text-2xl font-bold text-muted-foreground">—</div>
+                        <p className="text-xs text-muted-foreground">暂无相似题正确率数据</p>
                     </CardContent>
                 </Card>
+            )}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-                {/* Subject Distribution */}
+                {hasSubjectData ? (
                 <Card className="col-span-2 md:col-span-1">
                     <CardHeader>
                         <CardTitle>{t.stats?.subjectDistribution || "Subject Distribution"}</CardTitle>
@@ -158,7 +171,7 @@ export function PracticeStats() {
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
-                                    data={stats.subjectStats}
+                                    data={subjectStats}
                                     cx="50%"
                                     cy="50%"
                                     innerRadius={60}
@@ -168,7 +181,7 @@ export function PracticeStats() {
                                     dataKey="value"
                                     label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                                 >
-                                    {stats.subjectStats.map((entry, index) => (
+                                    {subjectStats.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
@@ -177,15 +190,25 @@ export function PracticeStats() {
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
+            ) : (
+                <Card className="col-span-2 md:col-span-1">
+                    <CardHeader>
+                        <CardTitle>{t.stats?.subjectDistribution || "Subject Distribution"}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-center h-[300px] text-muted-foreground">
+                        <p>暂无学科分布数据</p>
+                    </CardContent>
+                </Card>
+            )}
 
-                {/* Monthly Activity with Difficulty Stack */}
+                {hasActivityData ? (
                 <Card className="col-span-2 md:col-span-1">
                     <CardHeader>
                         <CardTitle>{t.stats?.weeklyTrend || "Monthly Trend"}</CardTitle>
                     </CardHeader>
                     <CardContent className="h-[300px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={stats.activityStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <BarChart data={activityStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                 <XAxis
                                     dataKey="date"
@@ -221,6 +244,16 @@ export function PracticeStats() {
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
+            ) : (
+                <Card className="col-span-2 md:col-span-1">
+                    <CardHeader>
+                        <CardTitle>{t.stats?.weeklyTrend || "Monthly Trend"}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-center h-[300px] text-muted-foreground">
+                        <p>暂无练习活动数据</p>
+                    </CardContent>
+                </Card>
+            )}
             </div>
         </div>
     );
