@@ -129,10 +129,12 @@ export async function getTodayReviewList(
     // Query due FsrsCards joined with ErrorItem.
     // We still select originalImageUrl so buildImageInfo can compute hasImage,
     // but the value is NOT exposed in the API response — only hasImage/imageUrl.
+    // Exclude mastered items (masteryLevel=2) from scheduling.
     const dueCards = await prisma.fsrsCard.findMany({
         where: {
             userId,
             due: { lte: now },
+            errorItem: { masteryLevel: { not: 2 } },
         },
         orderBy: { due: "asc" },
         take: effectiveLimit,
@@ -171,12 +173,13 @@ export async function getTodayReviewList(
     }));
 
     // Stats: count all due cards (ignoring limit)
+    // Exclude mastered items from all counts.
     const [totalDueCount, overdueCount] = await Promise.all([
         prisma.fsrsCard.count({
-            where: { userId, due: { lte: now } },
+            where: { userId, due: { lte: now }, errorItem: { masteryLevel: { not: 2 } } },
         }),
         prisma.fsrsCard.count({
-            where: { userId, due: { lt: todayStart } },
+            where: { userId, due: { lt: todayStart }, errorItem: { masteryLevel: { not: 2 } } },
         }),
     ]);
 
@@ -188,6 +191,7 @@ export async function getTodayReviewList(
         where: {
             userId,
             due: { gte: todayStart, lt: dayPlus7Start },
+            errorItem: { masteryLevel: { not: 2 } },
         },
         select: { due: true },
     });
@@ -222,6 +226,7 @@ export async function getTodayReviewList(
             where: {
                 userId,
                 id: { notIn: fsrsErrorItemIds },
+                masteryLevel: { not: 2 },
             },
             orderBy: { createdAt: "desc" },
             take: effectiveLimit,
@@ -250,6 +255,7 @@ export async function getTodayReviewList(
             where: {
                 userId,
                 id: { notIn: fsrsErrorItemIds },
+                masteryLevel: { not: 2 },
             },
         });
     } else {
@@ -265,6 +271,7 @@ export async function getTodayReviewList(
             where: {
                 userId,
                 id: { notIn: fsrsErrorItemIds },
+                masteryLevel: { not: 2 },
             },
         });
     }
