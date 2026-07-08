@@ -162,8 +162,7 @@ export function PracticeStats() {
                         <BookOpen className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{practiceOverview.totalPracticeCount}</div>
-                        <p className="text-xs text-muted-foreground">题</p>
+                        <div className="text-2xl font-bold">{practiceOverview.totalPracticeCount}题</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -174,8 +173,7 @@ export function PracticeStats() {
                         <Target className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{practiceOverview.todayPracticeCount}</div>
-                        <p className="text-xs text-muted-foreground">题</p>
+                        <div className="text-2xl font-bold">{practiceOverview.todayPracticeCount}题</div>
                     </CardContent>
                 </Card>
                 <Card>
