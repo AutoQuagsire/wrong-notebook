@@ -41,6 +41,14 @@ interface SessionResult {
 
 type Phase = "answering" | "rating" | "done";
 
+/** A review that the user has selected but not yet submitted to the server. */
+interface PendingKnowledgeReview {
+    itemId: string;
+    index: number;
+    rating: number;
+    answerText: string | null;
+}
+
 const SESSION_LIMIT = 10;
 
 const ratingOptions = [
@@ -67,8 +75,9 @@ export default function KnowledgeReviewSessionClient() {
     const [ratingIndex, setRatingIndex] = useState(0);
     const [lockedAnswers, setLockedAnswers] = useState<Record<string, string>>({});
     const [results, setResults] = useState<SessionResult[]>([]);
-    const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [pendingReview, setPendingReview] = useState<PendingKnowledgeReview | null>(null);
+    const [isFlushingPending, setIsFlushingPending] = useState(false);
     const answeringStartedAtRef = useRef(Date.now());
     const answeringDurationRef = useRef(0);
 
@@ -87,6 +96,7 @@ export default function KnowledgeReviewSessionClient() {
             setRatingIndex(0);
             setLockedAnswers({});
             setResults([]);
+            setPendingReview(null);
             answeringStartedAtRef.current = Date.now();
             answeringDurationRef.current = 0;
         } catch (err: unknown) {
@@ -123,14 +133,23 @@ export default function KnowledgeReviewSessionClient() {
         );
         setLockedAnswers({});
         setRatingIndex(0);
+        setPendingReview(null);
         setError(null);
         setPhase("rating");
     };
 
-    const handleSubmitRating = async (rating: number) => {
-        if (!currentItem || submitting) return;
+    /** Submit the pending review to the server (only once per card). */
+    async function flushPendingReview(): Promise<boolean> {
+        if (!pendingReview) return true;
 
-        setSubmitting(true);
+        const item = items[pendingReview.index];
+        if (!item) {
+            // The item is no longer in the list — discard stale pending.
+            setPendingReview(null);
+            return true;
+        }
+
+        setIsFlushingPending(true);
         setError(null);
 
         try {
@@ -143,39 +162,100 @@ export default function KnowledgeReviewSessionClient() {
                     lapses: number;
                 };
             }>("/api/knowledge/review/submit", {
-                knowledgeItemId: currentItem.knowledgeItemId,
-                rating,
-                answerText: currentAnswer || null,
+                knowledgeItemId: pendingReview.itemId,
+                rating: pendingReview.rating,
+                answerText: pendingReview.answerText,
                 durationSeconds: answeringDurationRef.current,
             });
 
-            const nextResults = [
-                ...results,
+            setResults((prev) => [
+                ...prev,
                 {
-                    knowledgeItemId: currentItem.knowledgeItemId,
-                    prompt: currentItem.promptPreview,
-                    rating,
+                    knowledgeItemId: pendingReview.itemId,
+                    prompt: item.promptPreview,
+                    rating: pendingReview.rating,
                     nextReviewAt: result.reviewResult.nextReviewAt,
                     scheduledDays: result.reviewResult.scheduledDays,
                 },
-            ];
+            ]);
 
-            setResults(nextResults);
-
-            const nextIndex = ratingIndex + 1;
-
-            if (nextIndex >= items.length) {
-                setPhase("done");
-            } else {
-                setRatingIndex(nextIndex);
-                setPhase("rating");
-            }
+            setPendingReview(null);
+            return true;
         } catch (err: unknown) {
             const msg = (err as { message?: string })?.message || "提交失败";
             setError(msg);
+            return false;
         } finally {
-            setSubmitting(false);
+            setIsFlushingPending(false);
         }
+    }
+
+    /** Move to the next card (or finish), flushing the pending review first. */
+    async function advanceAfterFlush(nextIndex: number) {
+        if (nextIndex >= items.length) {
+            // Last card — flush then show done.
+            const ok = await flushPendingReview();
+            if (ok) {
+                setPhase("done");
+            }
+        } else {
+            setRatingIndex(nextIndex);
+            setPhase("rating");
+        }
+    }
+
+    const handleSelectRating = async (rating: number) => {
+        if (!currentItem || isFlushingPending) return;
+
+        setError(null);
+
+        // If there is already a pending review from the previous card,
+        // flush it now before accepting the new rating.
+        if (pendingReview) {
+            const ok = await flushPendingReview();
+            if (!ok) return; // keep pending so the user can retry
+        }
+
+        // Defer submission — only remember the rating as pending.
+        setPendingReview({
+            itemId: currentItem.knowledgeItemId,
+            index: ratingIndex,
+            rating,
+            answerText: currentAnswer || null,
+        });
+
+        // Immediately move to the next card (or finish).
+        const nextIndex = ratingIndex + 1;
+        setRatingIndex(nextIndex);
+
+        if (nextIndex >= items.length) {
+            // Last card — flush and show done.
+            // We already set pending, now flush it.
+            // Need to use the next index-closure; re-read pendingReview in the
+            // next tick won't work because this is the same render cycle.
+            // Instead, defer to a separate effect-like flush.
+            // We'll handle this case in the rating UI by detecting
+            // "pendingReview exists and we're past the last item".
+            setPhase("rating");
+        }
+    };
+
+    /** Go back to the previous card, cancelling its unsubmitted rating. */
+    const handleGoPrevious = () => {
+        if (!pendingReview) return;
+        setPendingReview(null);
+        setRatingIndex(pendingReview.index);
+        setError(null);
+    };
+
+    /** Handle "return to review list" — flush pending before navigating. */
+    const handleNavigateAway = async () => {
+        if (pendingReview) {
+            await flushPendingReview();
+        }
+        // Navigation happens via the Link's href after the state updates,
+        // but since Link does a client-side navigation we need to prevent
+        // default and handle manually. We'll use router.push instead.
     };
 
     const handleRestart = () => {
@@ -334,6 +414,55 @@ export default function KnowledgeReviewSessionClient() {
     }
 
     if (phase === "rating" && currentItem) {
+        // If the user is past the last item (ratingIndex >= items.length)
+        // but still has an unflushed pending review, auto-flush and show done.
+        if (ratingIndex >= items.length) {
+            if (pendingReview) {
+                return (
+                    <main className="min-h-screen p-4 md:p-8 bg-background">
+                        <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
+                            <p className="text-muted-foreground">正在提交最后一条评分...</p>
+                            <Button
+                                type="button"
+                                variant="default"
+                                disabled={isFlushingPending}
+                                onClick={() => { void flushPendingReview().then(() => setPhase("done")); }}
+                            >
+                                {isFlushingPending ? "提交中..." : "确认提交并查看统计"}
+                            </Button>
+                        </div>
+                    </main>
+                );
+            }
+            // No pending review — just show done.
+            return (
+                <main className="min-h-screen p-4 md:p-8 bg-background">
+                    <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
+                        <p className="text-muted-foreground">评分已完成</p>
+                        <Button
+                            type="button"
+                            variant="default"
+                            onClick={() => setPhase("done")}
+                        >
+                            查看统计
+                        </Button>
+                    </div>
+                </main>
+            );
+        }
+
+        const canGoPrevious = pendingReview !== null && pendingReview.index === ratingIndex - 1;
+
+        // "Return to review" handler — flush pending before navigating
+        const handleReturnToReview = async (e: React.MouseEvent) => {
+            e.preventDefault();
+            if (pendingReview) {
+                await flushPendingReview();
+            }
+            // Client-side navigation
+            window.location.href = "/knowledge/review";
+        };
+
         return (
             <main className="min-h-screen p-4 md:p-8 bg-background">
                 <div className="max-w-4xl mx-auto space-y-6">
@@ -344,11 +473,9 @@ export default function KnowledgeReviewSessionClient() {
                                 第 {ratingIndex + 1} / {items.length} 条
                             </p>
                         </div>
-                        <Link href="/knowledge/review">
-                            <Button type="button" variant="outline" size="sm">
-                                <ArrowLeft className="mr-1 h-4 w-4" />返回今日复习
-                            </Button>
-                        </Link>
+                        <Button type="button" variant="outline" size="sm" onClick={handleReturnToReview}>
+                            <ArrowLeft className="mr-1 h-4 w-4" />返回今日复习
+                        </Button>
                     </div>
 
                     <Card>
@@ -396,16 +523,29 @@ export default function KnowledgeReviewSessionClient() {
                                         type="button"
                                         variant={option.variant}
                                         className="h-auto py-3 text-sm"
-                                        disabled={submitting}
-                                        onClick={() => handleSubmitRating(option.value)}
+                                        disabled={isFlushingPending}
+                                        onClick={() => { void handleSelectRating(option.value); }}
                                     >
                                         {option.label}
                                     </Button>
                                 ))}
                             </div>
-                            {submitting && (
+                            {isFlushingPending && (
                                 <p className="text-center text-muted-foreground mt-2">提交中...</p>
                             )}
+                            {/* "Undo previous rating" button */}
+                            <div className="mt-3 flex justify-center">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={!canGoPrevious || isFlushingPending}
+                                    onClick={handleGoPrevious}
+                                >
+                                    <ArrowLeft className="mr-1 h-3 w-3" />
+                                    {canGoPrevious ? "上一张（撤回未提交的评分）" : "已是第一张"}
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
