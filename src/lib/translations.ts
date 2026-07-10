@@ -737,7 +737,7 @@ export const translations = {
         upload: {
             // dragDrop: "点击或拖拽上传图片", // Moved to app
             support: "支持 JPG, PNG (最大 5MB)",
-            analyze: "AI 智能解析",
+            analyze: "AI识别",
             // analyzing: "解析中...", // Moved to app
             screenshot: "屏幕截图",
             screenshotDesc: "捕获屏幕内容（建议选择‘整个屏幕’或‘窗口’以获得最佳效果）",
