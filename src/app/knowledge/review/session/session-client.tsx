@@ -385,17 +385,6 @@ export default function KnowledgeReviewSessionClient() {
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">你的默写内容</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm min-h-24">
-                                {currentAnswer || "（本条未填写）"}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
                             <CardTitle className="text-base">四级评分</CardTitle>
                         </CardHeader>
                         <CardContent>
