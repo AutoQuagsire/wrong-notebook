@@ -75,7 +75,7 @@ function getAllowedOrigin(requestOrigin) {
  */
 function buildCorsHeaders(requestOrigin) {
     var h = {
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Provider-Base-URL",
         "Access-Control-Max-Age": "86400",
         "Access-Control-Allow-Private-Network": "true",
