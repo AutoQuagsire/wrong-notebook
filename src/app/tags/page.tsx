@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +55,17 @@ export default function TagsPage() {
         geography: null,
         politics: null,
     });
+    const [failedStandardSubjects, setFailedStandardSubjects] = useState<Record<SubjectKey, boolean>>({
+        math: false,
+        english: false,
+        physics: false,
+        chemistry: false,
+        biology: false,
+        chinese: false,
+        history: false,
+        geography: false,
+        politics: false,
+    });
 
     // 自定义标签 (扁平列表，仅用于显示)
     const [customTags, setCustomTags] = useState<Array<{ id: string; name: string; subject: string; parentName?: string }>>([]);
@@ -68,14 +79,42 @@ export default function TagsPage() {
 
     // 展开状态
     const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+    const tagRequestSequenceRef = useRef<Record<SubjectKey, number>>({
+        math: 0,
+        english: 0,
+        physics: 0,
+        chemistry: 0,
+        biology: 0,
+        chinese: 0,
+        history: 0,
+        geography: 0,
+        politics: 0,
+    });
 
     // 获取标签树
     const fetchTags = useCallback(async (subject: SubjectKey) => {
+        const requestSequence = (tagRequestSequenceRef.current[subject] ?? 0) + 1;
+        tagRequestSequenceRef.current[subject] = requestSequence;
+
+        setTagsBySubject(prev => ({ ...prev, [subject]: null }));
+        setFailedStandardSubjects(prev => ({ ...prev, [subject]: false }));
         try {
             const data = await apiClient.get<{ tags: TagTreeNode[] }>(`/api/tags?subject=${subject}`);
+
+            if (tagRequestSequenceRef.current[subject] !== requestSequence) {
+                return;
+            }
+
             setTagsBySubject(prev => ({ ...prev, [subject]: data.tags }));
+            setFailedStandardSubjects(prev => ({ ...prev, [subject]: false }));
         } catch (error) {
+            if (tagRequestSequenceRef.current[subject] !== requestSequence) {
+                return;
+            }
+
             console.error(`Failed to fetch ${subject} tags:`, error);
+            setTagsBySubject(prev => ({ ...prev, [subject]: [] }));
+            setFailedStandardSubjects(prev => ({ ...prev, [subject]: true }));
         }
     }, []);
 
@@ -113,8 +152,10 @@ export default function TagsPage() {
         // 初始加载
         fetchStats();
         fetchCustomTags();
-        // 默认加载数学标签
-        fetchTags('math');
+        // 预加载所有学科标签，用于判断哪些学科存在系统标签
+        SUBJECTS.forEach(({ key }) => {
+            fetchTags(key);
+        });
     }, [fetchTags, fetchCustomTags]);
 
     // 当学科变化时，获取对应的年级列表
@@ -264,12 +305,62 @@ export default function TagsPage() {
 
     // 渲染标准标签库
     const renderStandardTags = () => {
+        const isCheckingStandardTags = SUBJECTS.some(({ key }) => tagsBySubject[key] === null);
+        const hasFailedStandardSubjects = SUBJECTS.some(({ key }) => failedStandardSubjects[key]);
+        const subjectsWithSystemTags = SUBJECTS.filter(({ key }) => {
+            const tags = tagsBySubject[key];
+            return Array.isArray(tags) && tags.some(tag => tag.isSystem);
+        });
+
+        if (isCheckingStandardTags) {
+            return (
+                <Card>
+                    <CardContent className="py-12 text-center text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                        Loading...
+                    </CardContent>
+                </Card>
+            );
+        }
+
+        if (subjectsWithSystemTags.length === 0) {
+            return (
+                <Card>
+                    <CardContent className="py-12 text-center text-muted-foreground space-y-2">
+                        {hasFailedStandardSubjects ? (
+                            <>
+                                <div>{t.tags?.standard?.loadErrorTitle || "标准标签加载失败"}</div>
+                                <p className="text-sm">
+                                    {t.tags?.standard?.partialLoadError || "部分学科标签加载失败，请刷新页面后重试。"}
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <div>{t.tags?.standard?.empty || "暂无标准标签"}</div>
+                                <p className="text-sm">
+                                    {t.tags?.standard?.hint || "系统标签库尚未初始化或当前没有可展示的标准标签。"}
+                                </p>
+                            </>
+                        )}
+                    </CardContent>
+                </Card>
+            );
+        }
+
         return (
             <>
-                {SUBJECTS.map(({ key, name }) => {
+                {hasFailedStandardSubjects && (
+                    <Card className="mb-4 border-amber-200 bg-amber-50/50">
+                        <CardContent className="py-4 text-sm text-amber-900">
+                            {t.tags?.standard?.partialLoadError || "部分学科标签加载失败，请刷新页面后重试。"}
+                        </CardContent>
+                    </Card>
+                )}
+                {subjectsWithSystemTags.map(({ key, name }) => {
                     const subjectName = (t.tags?.subjects as Record<string, string>)?.[key] || name;
                     const isExpanded = expandedNodes[`subject-${key}`];
                     const tags = tagsBySubject[key];
+                    const systemTags = tags?.filter(tag => tag.isSystem) || [];
 
                     return (
                         <Card key={key} className="mb-4">
@@ -295,12 +386,8 @@ export default function TagsPage() {
                                             <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
                                             Loading...
                                         </div>
-                                    ) : tags.filter(t => t.isSystem).length === 0 ? (
-                                        <div className="text-center py-4 text-muted-foreground">
-                                            {t.tags?.stats?.empty || "暂无系统标签"}
-                                        </div>
                                     ) : (
-                                        tags.filter(t => t.isSystem).map(node => renderTreeNode(node))
+                                        systemTags.map(node => renderTreeNode(node))
                                     )}
                                 </CardContent>
                             )}
