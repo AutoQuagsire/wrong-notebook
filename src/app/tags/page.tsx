@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,15 +79,39 @@ export default function TagsPage() {
 
     // 展开状态
     const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+    const tagRequestSequenceRef = useRef<Record<SubjectKey, number>>({
+        math: 0,
+        english: 0,
+        physics: 0,
+        chemistry: 0,
+        biology: 0,
+        chinese: 0,
+        history: 0,
+        geography: 0,
+        politics: 0,
+    });
 
     // 获取标签树
     const fetchTags = useCallback(async (subject: SubjectKey) => {
+        const requestSequence = (tagRequestSequenceRef.current[subject] ?? 0) + 1;
+        tagRequestSequenceRef.current[subject] = requestSequence;
+
         setTagsBySubject(prev => ({ ...prev, [subject]: null }));
         setFailedStandardSubjects(prev => ({ ...prev, [subject]: false }));
         try {
             const data = await apiClient.get<{ tags: TagTreeNode[] }>(`/api/tags?subject=${subject}`);
+
+            if (tagRequestSequenceRef.current[subject] !== requestSequence) {
+                return;
+            }
+
             setTagsBySubject(prev => ({ ...prev, [subject]: data.tags }));
+            setFailedStandardSubjects(prev => ({ ...prev, [subject]: false }));
         } catch (error) {
+            if (tagRequestSequenceRef.current[subject] !== requestSequence) {
+                return;
+            }
+
             console.error(`Failed to fetch ${subject} tags:`, error);
             setTagsBySubject(prev => ({ ...prev, [subject]: [] }));
             setFailedStandardSubjects(prev => ({ ...prev, [subject]: true }));
