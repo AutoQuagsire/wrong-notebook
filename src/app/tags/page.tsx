@@ -113,8 +113,10 @@ export default function TagsPage() {
         // 初始加载
         fetchStats();
         fetchCustomTags();
-        // 默认加载数学标签
-        fetchTags('math');
+        // 预加载所有学科标签，用于判断哪些学科存在系统标签
+        SUBJECTS.forEach(({ key }) => {
+            fetchTags(key);
+        });
     }, [fetchTags, fetchCustomTags]);
 
     // 当学科变化时，获取对应的年级列表
@@ -264,12 +266,43 @@ export default function TagsPage() {
 
     // 渲染标准标签库
     const renderStandardTags = () => {
+        const isCheckingStandardTags = SUBJECTS.some(({ key }) => tagsBySubject[key] === null);
+        const subjectsWithSystemTags = SUBJECTS.filter(({ key }) => {
+            const tags = tagsBySubject[key];
+            return Array.isArray(tags) && tags.some(tag => tag.isSystem);
+        });
+
+        if (isCheckingStandardTags) {
+            return (
+                <Card>
+                    <CardContent className="py-12 text-center text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                        Loading...
+                    </CardContent>
+                </Card>
+            );
+        }
+
+        if (subjectsWithSystemTags.length === 0) {
+            return (
+                <Card>
+                    <CardContent className="py-12 text-center text-muted-foreground space-y-2">
+                        <div>{t.tags?.standard?.empty || "暂无标准标签"}</div>
+                        <p className="text-sm">
+                            {t.tags?.standard?.hint || "系统标签库尚未初始化或当前没有可展示的标准标签。"}
+                        </p>
+                    </CardContent>
+                </Card>
+            );
+        }
+
         return (
             <>
-                {SUBJECTS.map(({ key, name }) => {
+                {subjectsWithSystemTags.map(({ key, name }) => {
                     const subjectName = (t.tags?.subjects as Record<string, string>)?.[key] || name;
                     const isExpanded = expandedNodes[`subject-${key}`];
                     const tags = tagsBySubject[key];
+                    const systemTags = tags?.filter(tag => tag.isSystem) || [];
 
                     return (
                         <Card key={key} className="mb-4">
@@ -295,12 +328,8 @@ export default function TagsPage() {
                                             <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
                                             Loading...
                                         </div>
-                                    ) : tags.filter(t => t.isSystem).length === 0 ? (
-                                        <div className="text-center py-4 text-muted-foreground">
-                                            {t.tags?.stats?.empty || "暂无系统标签"}
-                                        </div>
                                     ) : (
-                                        tags.filter(t => t.isSystem).map(node => renderTreeNode(node))
+                                        systemTags.map(node => renderTreeNode(node))
                                     )}
                                 </CardContent>
                             )}

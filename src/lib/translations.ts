@@ -274,6 +274,10 @@ export const translations = {
                 custom: "Custom Tags",
                 stats: "Usage Statistics",
             },
+            standard: {
+                empty: "No standard tags available",
+                hint: "The standard tag library has not been initialized yet or there are no standard tags to display.",
+            },
             subjects: {
                 math: "Math",
                 english: "English",
@@ -922,6 +926,10 @@ export const translations = {
                 standard: "标准标签库",
                 custom: "自定义标签",
                 stats: "使用统计",
+            },
+            standard: {
+                empty: "暂无标准标签",
+                hint: "系统标签库尚未初始化或当前没有可展示的标准标签。",
             },
             subjects: {
                 math: "数学",
