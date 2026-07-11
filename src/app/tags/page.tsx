@@ -82,6 +82,7 @@ export default function TagsPage() {
 
     // 获取标签树
     const fetchTags = useCallback(async (subject: SubjectKey) => {
+        setTagsBySubject(prev => ({ ...prev, [subject]: null }));
         setFailedStandardSubjects(prev => ({ ...prev, [subject]: false }));
         try {
             const data = await apiClient.get<{ tags: TagTreeNode[] }>(`/api/tags?subject=${subject}`);
