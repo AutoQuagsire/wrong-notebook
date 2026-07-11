@@ -55,6 +55,17 @@ export default function TagsPage() {
         geography: null,
         politics: null,
     });
+    const [failedStandardSubjects, setFailedStandardSubjects] = useState<Record<SubjectKey, boolean>>({
+        math: false,
+        english: false,
+        physics: false,
+        chemistry: false,
+        biology: false,
+        chinese: false,
+        history: false,
+        geography: false,
+        politics: false,
+    });
 
     // 自定义标签 (扁平列表，仅用于显示)
     const [customTags, setCustomTags] = useState<Array<{ id: string; name: string; subject: string; parentName?: string }>>([]);
@@ -71,11 +82,14 @@ export default function TagsPage() {
 
     // 获取标签树
     const fetchTags = useCallback(async (subject: SubjectKey) => {
+        setFailedStandardSubjects(prev => ({ ...prev, [subject]: false }));
         try {
             const data = await apiClient.get<{ tags: TagTreeNode[] }>(`/api/tags?subject=${subject}`);
             setTagsBySubject(prev => ({ ...prev, [subject]: data.tags }));
         } catch (error) {
             console.error(`Failed to fetch ${subject} tags:`, error);
+            setTagsBySubject(prev => ({ ...prev, [subject]: [] }));
+            setFailedStandardSubjects(prev => ({ ...prev, [subject]: true }));
         }
     }, []);
 
@@ -267,6 +281,7 @@ export default function TagsPage() {
     // 渲染标准标签库
     const renderStandardTags = () => {
         const isCheckingStandardTags = SUBJECTS.some(({ key }) => tagsBySubject[key] === null);
+        const hasFailedStandardSubjects = SUBJECTS.some(({ key }) => failedStandardSubjects[key]);
         const subjectsWithSystemTags = SUBJECTS.filter(({ key }) => {
             const tags = tagsBySubject[key];
             return Array.isArray(tags) && tags.some(tag => tag.isSystem);
@@ -287,10 +302,21 @@ export default function TagsPage() {
             return (
                 <Card>
                     <CardContent className="py-12 text-center text-muted-foreground space-y-2">
-                        <div>{t.tags?.standard?.empty || "暂无标准标签"}</div>
-                        <p className="text-sm">
-                            {t.tags?.standard?.hint || "系统标签库尚未初始化或当前没有可展示的标准标签。"}
-                        </p>
+                        {hasFailedStandardSubjects ? (
+                            <>
+                                <div>{t.tags?.standard?.loadErrorTitle || "标准标签加载失败"}</div>
+                                <p className="text-sm">
+                                    {t.tags?.standard?.partialLoadError || "部分学科标签加载失败，请刷新页面后重试。"}
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <div>{t.tags?.standard?.empty || "暂无标准标签"}</div>
+                                <p className="text-sm">
+                                    {t.tags?.standard?.hint || "系统标签库尚未初始化或当前没有可展示的标准标签。"}
+                                </p>
+                            </>
+                        )}
                     </CardContent>
                 </Card>
             );
@@ -298,6 +324,13 @@ export default function TagsPage() {
 
         return (
             <>
+                {hasFailedStandardSubjects && (
+                    <Card className="mb-4 border-amber-200 bg-amber-50/50">
+                        <CardContent className="py-4 text-sm text-amber-900">
+                            {t.tags?.standard?.partialLoadError || "部分学科标签加载失败，请刷新页面后重试。"}
+                        </CardContent>
+                    </Card>
+                )}
                 {subjectsWithSystemTags.map(({ key, name }) => {
                     const subjectName = (t.tags?.subjects as Record<string, string>)?.[key] || name;
                     const isExpanded = expandedNodes[`subject-${key}`];

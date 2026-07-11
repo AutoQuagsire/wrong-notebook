@@ -277,6 +277,8 @@ export const translations = {
             standard: {
                 empty: "No standard tags available",
                 hint: "The standard tag library has not been initialized yet or there are no standard tags to display.",
+                loadErrorTitle: "Failed to load standard tags",
+                partialLoadError: "Some subject tags failed to load. Please refresh the page and try again.",
             },
             subjects: {
                 math: "Math",
@@ -930,6 +932,8 @@ export const translations = {
             standard: {
                 empty: "暂无标准标签",
                 hint: "系统标签库尚未初始化或当前没有可展示的标准标签。",
+                loadErrorTitle: "标准标签加载失败",
+                partialLoadError: "部分学科标签加载失败，请刷新页面后重试。",
             },
             subjects: {
                 math: "数学",
