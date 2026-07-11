@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, Suspense, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { UploadZone } from "@/components/upload-zone";
 import { CorrectionEditor } from "@/components/correction-editor";
@@ -37,7 +37,6 @@ function HomeContent() {
     const [currentImage, setCurrentImage] = useState<string | null>(null);
     const { t, language } = useLanguage();
     const searchParams = useSearchParams();
-    const router = useRouter();
     const initialNotebookId = searchParams.get("notebook");
     const [notebooks, setNotebooks] = useState<{ id: string; name: string }[]>([]);
     const [autoSelectedNotebookId, setAutoSelectedNotebookId] = useState<string | null>(null);
@@ -383,12 +382,8 @@ function HomeContent() {
             setStep("upload");
             setParsedData(null);
             setCurrentImage(null);
+            setInputMode("image");
             alert(t.common?.messages?.saveSuccess || 'Saved successfully!');
-
-            // Redirect to notebook page if subjectId is present
-            if (finalData.subjectId) {
-                router.push(`/notebooks/${finalData.subjectId}`);
-            }
         } catch (err: unknown) {
             const error = err as { message?: string; data?: string | { message?: string }; status?: number };
             frontendLogger.error('[HomeSave]', 'Save failed', {
@@ -543,12 +538,12 @@ function HomeContent() {
             }
 
             frontendLogger.info('[HomeDirectSave]', 'Save successful');
+            setStep("upload");
+            setParsedData(null);
+            setCurrentImage(null);
+            setInputMode("image");
             setAnalysisStep('idle');
             alert(t.common?.messages?.saveSuccess || 'Saved successfully!');
-
-            if (data.subjectId) {
-                router.push(`/notebooks/${data.subjectId}`);
-            }
         } catch (err: unknown) {
             const error = err as { message?: string; data?: string | { message?: string }; status?: number };
             frontendLogger.error('[HomeDirectSave]', 'Save failed', {
