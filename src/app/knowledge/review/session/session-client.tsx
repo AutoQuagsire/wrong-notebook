@@ -190,6 +190,17 @@ export default function KnowledgeReviewSessionClient() {
         }
     }
 
+    async function handleFinishRating() {
+        if (isFlushingPending) return;
+
+        const ok = await flushPendingReview();
+        if (!ok) {
+            return;
+        }
+
+        setPhase("done");
+    }
+
     /** Move to the next card (or finish), flushing the pending review first. */
     async function advanceAfterFlush(nextIndex: number) {
         if (nextIndex >= items.length) {
@@ -395,6 +406,61 @@ export default function KnowledgeReviewSessionClient() {
         );
     }
 
+    if (phase === "rating" && ratingIndex >= items.length) {
+        if (pendingReview) {
+            return (
+                <main className="min-h-screen p-4 md:p-8 bg-background">
+                    <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
+                        <p className="text-muted-foreground">正在提交最后一条评分...</p>
+                        {error && <p className="text-destructive text-sm">{error}</p>}
+                        <Button
+                            type="button"
+                            variant="default"
+                            disabled={isFlushingPending}
+                            onClick={() => { void handleFinishRating(); }}
+                        >
+                            {isFlushingPending ? "提交中..." : "确认提交并查看统计"}
+                        </Button>
+                    </div>
+                </main>
+            );
+        }
+
+        if (results.length >= items.length) {
+            return (
+                <main className="min-h-screen p-4 md:p-8 bg-background">
+                    <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
+                        <p className="text-muted-foreground">评分已完成</p>
+                        <Button
+                            type="button"
+                            variant="default"
+                            onClick={() => setPhase("done")}
+                        >
+                            查看统计
+                        </Button>
+                    </div>
+                </main>
+            );
+        }
+
+        return (
+            <main className="min-h-screen p-4 md:p-8 bg-background">
+                <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
+                    <p className="text-muted-foreground">最后一条评分状态异常，请重新开始本轮抽背。</p>
+                    {error && <p className="text-destructive text-sm">{error}</p>}
+                    <div className="flex justify-center gap-2">
+                        <Button type="button" onClick={handleRestart} variant="outline">
+                            <RotateCcw className="mr-1 h-4 w-4" />再来一组
+                        </Button>
+                        <Link href="/knowledge/review">
+                            <Button type="button" variant="outline">返回今日复习</Button>
+                        </Link>
+                    </div>
+                </div>
+            </main>
+        );
+    }
+
     if (phase === "rating" && !currentItem) {
         return (
             <main className="min-h-screen p-4 md:p-8 bg-background">
@@ -414,43 +480,6 @@ export default function KnowledgeReviewSessionClient() {
     }
 
     if (phase === "rating" && currentItem) {
-        // If the user is past the last item (ratingIndex >= items.length)
-        // but still has an unflushed pending review, auto-flush and show done.
-        if (ratingIndex >= items.length) {
-            if (pendingReview) {
-                return (
-                    <main className="min-h-screen p-4 md:p-8 bg-background">
-                        <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
-                            <p className="text-muted-foreground">正在提交最后一条评分...</p>
-                            <Button
-                                type="button"
-                                variant="default"
-                                disabled={isFlushingPending}
-                                onClick={() => { void flushPendingReview().then(() => setPhase("done")); }}
-                            >
-                                {isFlushingPending ? "提交中..." : "确认提交并查看统计"}
-                            </Button>
-                        </div>
-                    </main>
-                );
-            }
-            // No pending review — just show done.
-            return (
-                <main className="min-h-screen p-4 md:p-8 bg-background">
-                    <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
-                        <p className="text-muted-foreground">评分已完成</p>
-                        <Button
-                            type="button"
-                            variant="default"
-                            onClick={() => setPhase("done")}
-                        >
-                            查看统计
-                        </Button>
-                    </div>
-                </main>
-            );
-        }
-
         const canGoPrevious = pendingReview !== null && pendingReview.index === ratingIndex - 1;
 
         // "Return to review" handler — flush pending before navigating
