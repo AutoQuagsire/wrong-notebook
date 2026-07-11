@@ -410,17 +410,40 @@ export default function KnowledgeReviewSessionClient() {
         if (pendingReview) {
             return (
                 <main className="min-h-screen p-4 md:p-8 bg-background">
-                    <div className="max-w-4xl mx-auto text-center py-12 space-y-4">
-                        <p className="text-muted-foreground">正在提交最后一条评分...</p>
-                        {error && <p className="text-destructive text-sm">{error}</p>}
-                        <Button
-                            type="button"
-                            variant="default"
-                            disabled={isFlushingPending}
-                            onClick={() => { void handleFinishRating(); }}
-                        >
-                            {isFlushingPending ? "提交中..." : "确认提交并查看统计"}
-                        </Button>
+                    <div className="max-w-xl mx-auto py-12">
+                        <Card>
+                            <CardHeader className="text-center space-y-2">
+                                <CardTitle>
+                                    {isFlushingPending ? "正在提交最后一条评分…" : "本轮评分已完成"}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-center text-muted-foreground">
+                                    {isFlushingPending
+                                        ? "请稍候，提交成功后将自动生成本轮评分统计。"
+                                        : "最后一条评分尚未提交，确认后将生成本轮评分统计。"}
+                                </p>
+                                {error && <p className="text-sm text-center text-destructive">{error}</p>}
+                                <div className="flex flex-wrap justify-center gap-3">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={isFlushingPending}
+                                        onClick={handleGoPrevious}
+                                    >
+                                        上一张
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="default"
+                                        disabled={isFlushingPending}
+                                        onClick={() => { void handleFinishRating(); }}
+                                    >
+                                        {isFlushingPending ? "提交中..." : error ? "重新提交" : "提交并查看统计"}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
                 </main>
             );
