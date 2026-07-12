@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
-import { unauthorized, internalError } from "@/lib/api-errors";
+import { unauthorized, forbidden, notFound, internalError } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
 
 const logger = createLogger('api:error-items:mastery');
@@ -38,15 +38,26 @@ export async function PATCH(
         // Verify ownership before update
         const existingItem = await prisma.errorItem.findUnique({
             where: { id },
-            select: { userId: true },
+            select: {
+                id: true,
+                userId: true,
+                masteryLevel: true,
+            },
         });
 
         if (!existingItem) {
-            return NextResponse.json({ message: "Item not found" }, { status: 404 });
+            return notFound("Item not found");
         }
 
         if (existingItem.userId !== user.id) {
-            return NextResponse.json({ message: "Not authorized to update this item" }, { status: 403 });
+            return forbidden("Not authorized to update this item");
+        }
+
+        if (existingItem.masteryLevel === masteryLevel) {
+            return NextResponse.json({
+                id: existingItem.id,
+                masteryLevel: existingItem.masteryLevel,
+            });
         }
 
         const errorItem = await prisma.errorItem.update({
@@ -55,6 +66,10 @@ export async function PATCH(
             },
             data: {
                 masteryLevel,
+            },
+            select: {
+                id: true,
+                masteryLevel: true,
             },
         });
 
