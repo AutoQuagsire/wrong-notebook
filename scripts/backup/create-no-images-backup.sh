@@ -4,6 +4,8 @@ umask 077
 
 SCRIPT_NAME="$(basename "$0")"
 CURRENT_EUID=""
+BACKUP_TEST_MODE="${BACKUP_TEST_MODE:-0}"
+BACKUP_TEST_INJECT="${BACKUP_TEST_INJECT:-}"
 
 configure_safe_path() {
   case "${OSTYPE:-}" in
@@ -44,6 +46,10 @@ log_error() {
 fail() {
   log_error "$*"
   exit 1
+}
+
+is_test_mode() {
+  [[ "$BACKUP_TEST_MODE" == "1" ]]
 }
 
 require_cmd() {
@@ -294,6 +300,92 @@ query_single_value() {
   sqlite3 "$(sqlite_cli_path "$db")" "$sql" | trim_whitespace
 }
 
+run_test_injection() {
+  local injection_point="$1"
+
+  if ! is_test_mode; then
+    return 0
+  fi
+
+  case "$BACKUP_TEST_INJECT" in
+    "$injection_point")
+      fail "test injection triggered: $injection_point"
+      ;;
+  esac
+}
+
+scan_for_signature() {
+  local file="$1"
+  local signature="$2"
+  local label="$3"
+  local rc=0
+
+  if is_test_mode; then
+    case "$BACKUP_TEST_INJECT" in
+      grep-exit-2)
+        rc=2
+        ;;
+      grep-exit-7)
+        rc=7
+        ;;
+      *)
+        grep -aF -q -- "$signature" "$file" || rc=$?
+        ;;
+    esac
+  else
+    grep -aF -q -- "$signature" "$file" || rc=$?
+  fi
+
+  case "$rc" in
+    0)
+      fail "final database still contains forbidden signature: $label"
+      ;;
+    1)
+      return 0
+      ;;
+    *)
+      fail "image signature scan failed: $label (grep exit $rc)"
+      ;;
+  esac
+}
+
+validate_archive_members() {
+  local archive_path="$1"
+  local archive_member=""
+  local member_count=0
+  local seen_database_dir=false
+  local seen_database_file=false
+  local seen_manifest=false
+  local seen_sha256s=false
+
+  while IFS= read -r archive_member; do
+    [[ -n "$archive_member" ]] || continue
+    member_count=$((member_count + 1))
+    case "$archive_member" in
+      'database/')
+        seen_database_dir=true
+        ;;
+      'database/production-no-images.sqlite')
+        seen_database_file=true
+        ;;
+      'manifest.json')
+        seen_manifest=true
+        ;;
+      'SHA256SUMS')
+        seen_sha256s=true
+        ;;
+      *)
+        fail "archive contains unexpected members"
+        ;;
+    esac
+  done < <(tar -tzf "$archive_path")
+
+  [[ "$seen_database_file" == "true" ]] || fail "archive missing sanitized database"
+  [[ "$seen_manifest" == "true" ]] || fail "archive missing manifest"
+  [[ "$seen_sha256s" == "true" ]] || fail "archive missing SHA256SUMS"
+  (( member_count >= 3 && member_count <= 4 )) || fail "archive contains unexpected members"
+}
+
 write_sorted_schema_list() {
   local db="$1"
   local type="$2"
@@ -468,9 +560,24 @@ PACKAGE_ROOT="$WORKDIR/package-root"
 ARCHIVE_STEM=""
 ARCHIVE_PART=""
 SIDECAR_PART=""
+ARCHIVE_PUBLISHED=false
+SIDECAR_PUBLISHED=false
+BACKUP_COMPLETE=false
+ARCHIVE_PART_CREATED=false
+SIDECAR_PART_CREATED=false
+BACKUP_TEST_STAMP="${BACKUP_TEST_STAMP:-}"
 cleanup() {
   local status=$?
   set +e
+  if [[ "${ARCHIVE_PART_CREATED:-false}" == "true" && -n "${ARCHIVE_PART:-}" ]]; then
+    rm -f -- "${ARCHIVE_PART}"
+  fi
+  if [[ "${SIDECAR_PART_CREATED:-false}" == "true" && -n "${SIDECAR_PART:-}" ]]; then
+    rm -f -- "${SIDECAR_PART}"
+  fi
+  if [[ "${ARCHIVE_PUBLISHED:-false}" == "true" && "${SIDECAR_PUBLISHED:-false}" != "true" && -n "${ARCHIVE_PATH:-}" ]]; then
+    rm -f -- "${ARCHIVE_PATH}"
+  fi
   if [[ -n "${WORKDIR:-}" && -d "${WORKDIR:-}" ]]; then
     rm -rf -- "${WORKDIR:?}"
   fi
@@ -482,7 +589,12 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 CREATED_AT="$(TZ="$TIMEZONE" date '+%Y-%m-%dT%H:%M:%S%:z')"
-STAMP="$(TZ="$TIMEZONE" date '+%Y%m%d-%H%M%S')"
+if is_test_mode && [[ -n "$BACKUP_TEST_STAMP" ]]; then
+  [[ "$BACKUP_TEST_STAMP" =~ ^[0-9]{8}-[0-9]{6}$ ]] || fail "BACKUP_TEST_STAMP must match YYYYMMDD-HHMMSS"
+  STAMP="$BACKUP_TEST_STAMP"
+else
+  STAMP="$(TZ="$TIMEZONE" date '+%Y%m%d-%H%M%S')"
+fi
 ARCHIVE_STEM="wrong-notebook-no-images-${STAMP}.tar.gz"
 ARCHIVE_PATH="${OUTPUT_DIR_REAL}/${ARCHIVE_STEM}"
 ARCHIVE_PART="${ARCHIVE_PATH}.part"
@@ -569,14 +681,11 @@ grep -qx '_prisma_migrations' "$FINAL_TABLES" || fail "_prisma_migrations table 
 
 DATA_IMAGE_SIGNATURE_FOUND=false
 BASE64_SIGNATURE_FOUND=false
+if is_test_mode && [[ "$BACKUP_TEST_INJECT" == "inject-signature-before-scan" ]]; then
+  printf '%s' 'data:image/' >> "$FINAL_DB_TMP"
+fi
 for signature in 'data:image/' ';base64,' 'image/png' 'image/jpeg' 'image/jpg' 'image/webp' 'image/gif' 'iVBORw0KGgo'; do
-  if grep -aF -q -- "$signature" "$FINAL_DB_TMP"; then
-    case "$signature" in
-      'data:image/') DATA_IMAGE_SIGNATURE_FOUND=true ;;
-      ';base64,') BASE64_SIGNATURE_FOUND=true ;;
-    esac
-    fail "final database still contains forbidden signature: $signature"
-  fi
+  scan_for_signature "$FINAL_DB_TMP" "$signature" "$signature"
 done
 
 mkdir -m 700 -- "$PACKAGE_ROOT"
@@ -623,13 +732,34 @@ chmod 600 "$PACKAGE_ROOT/manifest.json"
 chmod 600 "$PACKAGE_ROOT/SHA256SUMS"
 
 tar -czf "$ARCHIVE_PART" -C "$PACKAGE_ROOT" database manifest.json SHA256SUMS
+ARCHIVE_PART_CREATED=true
 chmod 600 "$ARCHIVE_PART"
-mv -f -- "$ARCHIVE_PART" "$ARCHIVE_PATH"
+[[ -f "$ARCHIVE_PART" ]] || fail "archive .part was not created"
+[[ ! -L "$ARCHIVE_PART" ]] || fail "archive .part must not be a symlink"
+[[ -s "$ARCHIVE_PART" ]] || fail "archive .part must not be empty"
+validate_archive_members "$ARCHIVE_PART"
 
-ARCHIVE_SHA256="$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')"
+ARCHIVE_SHA256="$(sha256sum "$ARCHIVE_PART" | awk '{print $1}')"
+[[ "$ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "archive SHA-256 is invalid"
+run_test_injection "fail-before-sidecar-write"
 printf '%s  %s\n' "$ARCHIVE_SHA256" "$(basename "$ARCHIVE_PATH")" > "$SIDECAR_PART"
+SIDECAR_PART_CREATED=true
 chmod 600 "$SIDECAR_PART"
+[[ -f "$SIDECAR_PART" ]] || fail "checksum .part was not created"
+[[ ! -L "$SIDECAR_PART" ]] || fail "checksum .part must not be a symlink"
+[[ -s "$SIDECAR_PART" ]] || fail "checksum .part must not be empty"
+[[ "$(wc -l < "$SIDECAR_PART" | tr -d ' ')" == "1" ]] || fail "checksum .part must contain exactly one line"
+grep -Eq "^[0-9a-f]{64}  $(basename "$ARCHIVE_PATH")$" "$SIDECAR_PART" || fail "checksum .part content is invalid"
+run_test_injection "fail-before-archive-publish"
+mv -f -- "$ARCHIVE_PART" "$ARCHIVE_PATH"
+ARCHIVE_PUBLISHED=true
+ARCHIVE_PART_CREATED=false
+
+run_test_injection "fail-before-sidecar-publish"
 mv -f -- "$SIDECAR_PART" "$SIDECAR_PATH"
+SIDECAR_PUBLISHED=true
+SIDECAR_PART_CREATED=false
+BACKUP_COMPLETE=true
 
 printf 'BACKUP_FILE=%s\n' "$ARCHIVE_PATH"
 printf 'CHECKSUM_FILE=%s\n' "$SIDECAR_PATH"

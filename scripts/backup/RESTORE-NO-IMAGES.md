@@ -24,13 +24,18 @@ Given:
 - `wrong-notebook-no-images-YYYYMMDD-HHMMSS.tar.gz`
 - `wrong-notebook-no-images-YYYYMMDD-HHMMSS.tar.gz.sha256`
 
+Do not restore from:
+
+- a standalone archive without the matching sidecar
+- any `.part` file
+
 Run:
 
 ```bash
 sha256sum -c wrong-notebook-no-images-YYYYMMDD-HHMMSS.tar.gz.sha256
 ```
 
-It must pass before extraction.
+It must pass before extraction. Treat the sidecar as the completion marker for the backup package.
 
 ## Extract and verify package contents
 

@@ -21,6 +21,10 @@ assert_dir_absent() {
   [[ ! -e "$1" ]] || fail "expected path to be absent: $1"
 }
 
+assert_path_absent() {
+  [[ ! -e "$1" && ! -L "$1" ]] || fail "expected path to be absent: $1"
+}
+
 assert_eq() {
   [[ "$1" == "$2" ]] || fail "expected '$1' to equal '$2'"
 }
@@ -171,6 +175,19 @@ CREATE TABLE "PracticeRecord" (
 SQL
 }
 
+run_backup_script() {
+  local injection="${1-}"
+  shift || true
+
+  if [[ -n "$injection" ]]; then
+    BACKUP_TEST_MODE=1 BACKUP_TEST_INJECT="$injection" BACKUP_TEST_STAMP="${BACKUP_TEST_STAMP_VALUE}" \
+      bash "$TARGET_SCRIPT" "$@"
+  else
+    BACKUP_TEST_MODE=1 BACKUP_TEST_STAMP="${BACKUP_TEST_STAMP_VALUE}" \
+      bash "$TARGET_SCRIPT" "$@"
+  fi
+}
+
 require_cmd bash
 require_cmd sqlite3
 require_cmd tar
@@ -211,6 +228,12 @@ SYMLINK_OUTPUT_REAL="${BASE_DIR}/symlink-output-real"
 SYMLINK_OUTPUT_PATH="${BASE_DIR}/symlink-output-link"
 SYMLINK_TEMP_REAL="${BASE_DIR}/symlink-temp-real"
 SYMLINK_TEMP_PATH="${BASE_DIR}/symlink-temp-link"
+BACKUP_TEST_STAMP_VALUE="20990101-000000"
+FIXED_ARCHIVE_NAME="wrong-notebook-no-images-${BACKUP_TEST_STAMP_VALUE}.tar.gz"
+FIXED_ARCHIVE_PATH="${OUTPUT_DIR}/${FIXED_ARCHIVE_NAME}"
+FIXED_SIDECAR_PATH="${FIXED_ARCHIVE_PATH}.sha256"
+FIXED_ARCHIVE_PART_PATH="${FIXED_ARCHIVE_PATH}.part"
+FIXED_SIDECAR_PART_PATH="${FIXED_SIDECAR_PATH}.part"
 
 mkdir -p "$OUTPUT_DIR" "$TEMP_ROOT" "$EXTRACT_DIR" "$FAIL_OUTPUT_DIR"
 
@@ -222,7 +245,7 @@ cp "$SOURCE_DB" "$READONLY_SOURCE_DB"
 chmod 400 "$READONLY_SOURCE_DB"
 
 RUN_OUTPUT="$(
-  bash "$TARGET_SCRIPT" \
+  run_backup_script "" \
     --source-db "$SOURCE_DB" \
     --output-dir "$OUTPUT_DIR" \
     --temp-root "$TEMP_ROOT" \
@@ -320,7 +343,8 @@ READONLY_MTIME_BEFORE="$(stat -c '%Y' "$READONLY_SOURCE_DB")"
 READONLY_OUTPUT_DIR="${BASE_DIR}/readonly output"
 READONLY_TEMP_ROOT="${BASE_DIR}/readonly temp"
 mkdir -p "$READONLY_OUTPUT_DIR" "$READONLY_TEMP_ROOT"
-bash "$TARGET_SCRIPT" \
+BACKUP_TEST_STAMP_VALUE="20990101-000001"
+run_backup_script "" \
   --source-db "$READONLY_SOURCE_DB" \
   --output-dir "$READONLY_OUTPUT_DIR" \
   --temp-root "$READONLY_TEMP_ROOT" >/dev/null
@@ -375,6 +399,157 @@ STATUS_LOCK=$?
 set -e
 [[ $STATUS_LOCK -ne 0 ]] || fail "second instance should fail to acquire lock"
 exec 9>&-
+
+FAILURE_OUTPUT_B1="${BASE_DIR}/failure-output-b1"
+mkdir -p "$FAILURE_OUTPUT_B1"
+FAILURE_ARCHIVE_PATH="${FAILURE_OUTPUT_B1}/wrong-notebook-no-images-${BACKUP_TEST_STAMP_VALUE}.tar.gz"
+FAILURE_SIDECAR_PATH="${FAILURE_ARCHIVE_PATH}.sha256"
+FAILURE_ARCHIVE_PART_PATH="${FAILURE_ARCHIVE_PATH}.part"
+FAILURE_SIDECAR_PART_PATH="${FAILURE_SIDECAR_PATH}.part"
+
+set +e
+run_backup_script "fail-before-sidecar-write" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$FAILURE_OUTPUT_B1" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_FAIL_SIDECAR_WRITE=$?
+set -e
+[[ $STATUS_FAIL_SIDECAR_WRITE -ne 0 ]] || fail "sidecar generation failure should fail"
+assert_path_absent "$FAILURE_ARCHIVE_PATH"
+assert_path_absent "$FAILURE_SIDECAR_PATH"
+assert_path_absent "$FAILURE_ARCHIVE_PART_PATH"
+assert_path_absent "$FAILURE_SIDECAR_PART_PATH"
+
+set +e
+run_backup_script "fail-before-sidecar-publish" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$FAILURE_OUTPUT_B1" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_FAIL_SIDECAR_PUBLISH=$?
+set -e
+[[ $STATUS_FAIL_SIDECAR_PUBLISH -ne 0 ]] || fail "sidecar publish failure should fail"
+assert_path_absent "$FAILURE_ARCHIVE_PATH"
+assert_path_absent "$FAILURE_SIDECAR_PATH"
+assert_path_absent "$FAILURE_ARCHIVE_PART_PATH"
+assert_path_absent "$FAILURE_SIDECAR_PART_PATH"
+
+set +e
+run_backup_script "fail-before-archive-publish" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$FAILURE_OUTPUT_B1" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_FAIL_ARCHIVE_PUBLISH=$?
+set -e
+[[ $STATUS_FAIL_ARCHIVE_PUBLISH -ne 0 ]] || fail "archive publish failure should fail"
+assert_path_absent "$FAILURE_ARCHIVE_PATH"
+assert_path_absent "$FAILURE_SIDECAR_PATH"
+assert_path_absent "$FAILURE_ARCHIVE_PART_PATH"
+assert_path_absent "$FAILURE_SIDECAR_PART_PATH"
+
+PREEXIST_OUTPUT_DIR="${BASE_DIR}/preexisting-output"
+mkdir -p "$PREEXIST_OUTPUT_DIR"
+PREEXIST_ARCHIVE_PATH="${PREEXIST_OUTPUT_DIR}/wrong-notebook-no-images-${BACKUP_TEST_STAMP_VALUE}.tar.gz"
+PREEXIST_SIDECAR_PATH="${PREEXIST_ARCHIVE_PATH}.sha256"
+PREEXIST_ARCHIVE_PART_PATH="${PREEXIST_ARCHIVE_PATH}.part"
+PREEXIST_SIDECAR_PART_PATH="${PREEXIST_SIDECAR_PATH}.part"
+
+printf 'old archive\n' > "$PREEXIST_ARCHIVE_PATH"
+PREEXIST_ARCHIVE_SHA_BEFORE="$(sha256sum "$PREEXIST_ARCHIVE_PATH" | awk '{print $1}')"
+set +e
+run_backup_script "" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$PREEXIST_OUTPUT_DIR" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_PREEXIST_ARCHIVE=$?
+set -e
+[[ $STATUS_PREEXIST_ARCHIVE -ne 0 ]] || fail "preexisting final archive should fail"
+assert_eq "$PREEXIST_ARCHIVE_SHA_BEFORE" "$(sha256sum "$PREEXIST_ARCHIVE_PATH" | awk '{print $1}')"
+rm -f -- "$PREEXIST_ARCHIVE_PATH"
+
+printf 'old checksum\n' > "$PREEXIST_SIDECAR_PATH"
+PREEXIST_SIDECAR_SHA_BEFORE="$(sha256sum "$PREEXIST_SIDECAR_PATH" | awk '{print $1}')"
+set +e
+run_backup_script "" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$PREEXIST_OUTPUT_DIR" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_PREEXIST_SIDECAR=$?
+set -e
+[[ $STATUS_PREEXIST_SIDECAR -ne 0 ]] || fail "preexisting final sidecar should fail"
+assert_eq "$PREEXIST_SIDECAR_SHA_BEFORE" "$(sha256sum "$PREEXIST_SIDECAR_PATH" | awk '{print $1}')"
+rm -f -- "$PREEXIST_SIDECAR_PATH"
+
+printf 'old archive part\n' > "$PREEXIST_ARCHIVE_PART_PATH"
+PREEXIST_ARCHIVE_PART_SHA_BEFORE="$(sha256sum "$PREEXIST_ARCHIVE_PART_PATH" | awk '{print $1}')"
+set +e
+run_backup_script "" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$PREEXIST_OUTPUT_DIR" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_PREEXIST_ARCHIVE_PART=$?
+set -e
+[[ $STATUS_PREEXIST_ARCHIVE_PART -ne 0 ]] || fail "preexisting archive .part should fail"
+assert_eq "$PREEXIST_ARCHIVE_PART_SHA_BEFORE" "$(sha256sum "$PREEXIST_ARCHIVE_PART_PATH" | awk '{print $1}')"
+rm -f -- "$PREEXIST_ARCHIVE_PART_PATH"
+
+printf 'old checksum part\n' > "$PREEXIST_SIDECAR_PART_PATH"
+PREEXIST_SIDECAR_PART_SHA_BEFORE="$(sha256sum "$PREEXIST_SIDECAR_PART_PATH" | awk '{print $1}')"
+set +e
+run_backup_script "" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$PREEXIST_OUTPUT_DIR" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_PREEXIST_SIDECAR_PART=$?
+set -e
+[[ $STATUS_PREEXIST_SIDECAR_PART -ne 0 ]] || fail "preexisting checksum .part should fail"
+assert_eq "$PREEXIST_SIDECAR_PART_SHA_BEFORE" "$(sha256sum "$PREEXIST_SIDECAR_PART_PATH" | awk '{print $1}')"
+rm -f -- "$PREEXIST_SIDECAR_PART_PATH"
+
+SCAN_FAILURE_OUTPUT_DIR="${BASE_DIR}/scan-failure-output"
+mkdir -p "$SCAN_FAILURE_OUTPUT_DIR"
+SCAN_FAILURE_ARCHIVE_PATH="${SCAN_FAILURE_OUTPUT_DIR}/wrong-notebook-no-images-${BACKUP_TEST_STAMP_VALUE}.tar.gz"
+SCAN_FAILURE_SIDECAR_PATH="${SCAN_FAILURE_ARCHIVE_PATH}.sha256"
+SCAN_FAILURE_ARCHIVE_PART_PATH="${SCAN_FAILURE_ARCHIVE_PATH}.part"
+SCAN_FAILURE_SIDECAR_PART_PATH="${SCAN_FAILURE_SIDECAR_PATH}.part"
+
+set +e
+run_backup_script "inject-signature-before-scan" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$SCAN_FAILURE_OUTPUT_DIR" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_SCAN_HIT=$?
+set -e
+[[ $STATUS_SCAN_HIT -ne 0 ]] || fail "scan hit should fail"
+assert_path_absent "$SCAN_FAILURE_ARCHIVE_PATH"
+assert_path_absent "$SCAN_FAILURE_SIDECAR_PATH"
+assert_path_absent "$SCAN_FAILURE_ARCHIVE_PART_PATH"
+assert_path_absent "$SCAN_FAILURE_SIDECAR_PART_PATH"
+
+set +e
+run_backup_script "grep-exit-2" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$SCAN_FAILURE_OUTPUT_DIR" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_SCAN_GREP_2=$?
+set -e
+[[ $STATUS_SCAN_GREP_2 -ne 0 ]] || fail "grep exit 2 should fail"
+assert_path_absent "$SCAN_FAILURE_ARCHIVE_PATH"
+assert_path_absent "$SCAN_FAILURE_SIDECAR_PATH"
+assert_path_absent "$SCAN_FAILURE_ARCHIVE_PART_PATH"
+assert_path_absent "$SCAN_FAILURE_SIDECAR_PART_PATH"
+
+set +e
+run_backup_script "grep-exit-7" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$SCAN_FAILURE_OUTPUT_DIR" \
+  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+STATUS_SCAN_GREP_7=$?
+set -e
+[[ $STATUS_SCAN_GREP_7 -ne 0 ]] || fail "grep exit 7 should fail"
+assert_path_absent "$SCAN_FAILURE_ARCHIVE_PATH"
+assert_path_absent "$SCAN_FAILURE_SIDECAR_PATH"
+assert_path_absent "$SCAN_FAILURE_ARCHIVE_PART_PATH"
+assert_path_absent "$SCAN_FAILURE_SIDECAR_PART_PATH"
 
 mkdir -p "$SYMLINK_OUTPUT_REAL" "$SYMLINK_TEMP_REAL"
 if create_test_symlink "$SYMLINK_OUTPUT_REAL" "$SYMLINK_OUTPUT_PATH" && create_test_symlink "$SYMLINK_TEMP_REAL" "$SYMLINK_TEMP_PATH"; then

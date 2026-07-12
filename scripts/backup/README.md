@@ -59,6 +59,11 @@ If an existing directory does not meet these requirements, the script refuses to
 - the lock file must be a regular file owned by the current user
 - the script never auto-`chmod` existing output, temp, or lock directories
 - publish targets fail closed if the final archive, sidecar, or `.part` file already exists
+- the final `.tar.gz.sha256` sidecar is the completion marker for a successful backup package
+- a standalone `.tar.gz` without the matching final sidecar must be treated as an incomplete artifact
+- `.part` files are temporary staging files only and must never be downloaded or restored
+- on normal failure paths, the script attempts to retract any just-published archive if the final sidecar is not published
+- a hard kill (`SIGKILL`) or host crash can still leave an orphaned archive; consumers must ignore any archive that does not have its matching final sidecar
 
 On Linux, the script resets `PATH` to:
 
