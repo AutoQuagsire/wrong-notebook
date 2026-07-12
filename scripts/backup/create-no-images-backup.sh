@@ -3,11 +3,16 @@ set -Eeuo pipefail
 umask 077
 
 SCRIPT_NAME="$(basename "$0")"
-SCRIPT_PATH="$(
-  cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 &&
-    printf '%s/%s\n' "$(pwd -P)" "$(basename "${BASH_SOURCE[0]}")"
-)"
-ORIGINAL_ARGS=("$@")
+CURRENT_EUID=""
+
+configure_safe_path() {
+  case "${OSTYPE:-}" in
+    linux*)
+      PATH='/usr/sbin:/usr/bin:/sbin:/bin'
+      export PATH
+      ;;
+  esac
+}
 
 usage() {
   cat <<'EOF'
@@ -44,6 +49,11 @@ fail() {
 require_cmd() {
   local cmd="$1"
   command -v "$cmd" >/dev/null 2>&1 || fail "missing dependency: $cmd"
+}
+
+path_exists_or_symlink() {
+  local path="$1"
+  [[ -e "$path" || -L "$path" ]]
 }
 
 ensure_no_newlines() {
@@ -83,6 +93,7 @@ ensure_absolute_file_arg() {
 
 canonical_dir() {
   local dir="$1"
+  assert_no_symlink_components "$dir"
   if [[ -d "$dir" ]]; then
     (
       cd "$dir" >/dev/null 2>&1 &&
@@ -101,6 +112,7 @@ canonical_dir() {
 
 canonical_file() {
   local file="$1"
+  assert_no_symlink_components "$file"
   [[ -e "$file" ]] || fail "source database not found: $file"
   [[ -f "$file" ]] || fail "source database must be a regular file: $file"
   [[ ! -L "$file" ]] || fail "source database must not be a symlink: $file"
@@ -112,6 +124,135 @@ canonical_file() {
 
 trim_whitespace() {
   sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+assert_no_symlink_components() {
+  local path="$1"
+  local current="/"
+  local remainder=""
+  local component=""
+
+  [[ "$path" == /* ]] || fail "path must be absolute"
+  ensure_safe_path_fragment "$path" || fail "path contains unsupported characters"
+
+  if [[ "$path" == "/" ]]; then
+    return 0
+  fi
+
+  remainder="${path#/}"
+  IFS='/' read -r -a components <<< "$remainder"
+  for component in "${components[@]}"; do
+    [[ -n "$component" ]] || continue
+    if [[ "$current" == "/" ]]; then
+      current="/${component}"
+    else
+      current="${current}/${component}"
+    fi
+
+    if [[ -L "$current" ]]; then
+      fail "path must not contain symlink components: $current"
+    fi
+
+    if ! path_exists_or_symlink "$current"; then
+      break
+    fi
+  done
+}
+
+owner_uid() {
+  local path="$1"
+  stat -c '%u' -- "$path"
+}
+
+mode_octal() {
+  local path="$1"
+  stat -c '%a' -- "$path"
+}
+
+ensure_owned_by_current_user() {
+  local path="$1"
+  local label="$2"
+  local uid
+
+  uid="$(owner_uid "$path")"
+  [[ "$uid" == "$CURRENT_EUID" ]] || fail "$label must be owned by the current user"
+}
+
+ensure_not_group_or_other_writable() {
+  local path="$1"
+  local label="$2"
+  local mode
+
+  mode="$(mode_octal "$path")"
+  (( (8#$mode & 8#022) == 0 )) || fail "$label must not be group or other writable"
+}
+
+ensure_secure_existing_dir() {
+  local dir="$1"
+  local label="$2"
+
+  assert_no_symlink_components "$dir"
+  path_exists_or_symlink "$dir" || fail "$label does not exist"
+  [[ ! -L "$dir" ]] || fail "$label must not be a symlink"
+  [[ -d "$dir" ]] || fail "$label must be a directory"
+  ensure_owned_by_current_user "$dir" "$label"
+  ensure_not_group_or_other_writable "$dir" "$label"
+}
+
+create_secure_dir() {
+  local dir="$1"
+  local label="$2"
+  local parent
+
+  parent="$(dirname "$dir")"
+  ensure_secure_existing_dir "$parent" "$label parent directory"
+  mkdir -m 700 -- "$dir"
+  ensure_secure_existing_dir "$dir" "$label"
+}
+
+prepare_secure_dir() {
+  local dir="$1"
+  local label="$2"
+
+  if path_exists_or_symlink "$dir"; then
+    ensure_secure_existing_dir "$dir" "$label"
+  else
+    create_secure_dir "$dir" "$label"
+  fi
+}
+
+prepare_secure_lock_file() {
+  local lock_file="$1"
+  local lock_parent
+
+  lock_parent="$(dirname "$lock_file")"
+  prepare_secure_dir "$lock_parent" "lock directory"
+
+  if path_exists_or_symlink "$lock_file"; then
+    [[ ! -L "$lock_file" ]] || fail "lock file must not be a symlink"
+    [[ -f "$lock_file" ]] || fail "lock file must be a regular file"
+    ensure_owned_by_current_user "$lock_file" "lock file"
+    ensure_not_group_or_other_writable "$lock_file" "lock file"
+  fi
+
+  exec {LOCK_FD}>>"$lock_file"
+
+  [[ ! -L "$lock_file" ]] || fail "lock file must not be a symlink"
+  [[ -f "$lock_file" ]] || fail "lock file must be a regular file"
+  ensure_owned_by_current_user "$lock_file" "lock file"
+  ensure_not_group_or_other_writable "$lock_file" "lock file"
+
+  flock -n -w 1 "$LOCK_FD" || fail "could not acquire backup lock: $lock_file"
+}
+
+ensure_publish_target_absent() {
+  local path="$1"
+  local label="$2"
+
+  assert_no_symlink_components "$path"
+  if path_exists_or_symlink "$path"; then
+    fail "$label already exists: $path"
+  fi
 }
 
 sqlite_cli_path() {
@@ -191,12 +332,32 @@ verify_required_columns() {
     || fail "PracticeRecord.answerImageUrl constraint mismatch"
 }
 
-scan_for_signature() {
-  local file="$1"
-  local signature="$2"
-  if grep -aF -q -- "$signature" "$file"; then
-    fail "final database still contains forbidden signature: $signature"
-  fi
+write_schema_definition_list() {
+  local db="$1"
+  local type="$2"
+  local output="$3"
+
+  sqlite3 "$(sqlite_cli_path "$db")" \
+    "SELECT name || '|' || COALESCE(sql, '') FROM sqlite_schema WHERE type='${type}' ORDER BY name;" >"$output"
+}
+
+write_table_row_counts() {
+  local db="$1"
+  local output="$2"
+  local table_names=""
+  local table_name=""
+  local escaped_name=""
+  local count=""
+
+  table_names="$(sqlite3 "$(sqlite_cli_path "$db")" "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;")"
+  : >"$output"
+  while IFS= read -r table_name; do
+    [[ -n "$table_name" ]] || continue
+    table_name="${table_name%$'\r'}"
+    escaped_name="${table_name//\"/\"\"}"
+    count="$(query_single_value "$db" "SELECT COUNT(*) FROM \"$escaped_name\";")"
+    printf '%s|%s\n' "$table_name" "$count" >>"$output"
+  done <<<"$table_names"
 }
 
 SOURCE_DB=""
@@ -205,6 +366,8 @@ TEMP_ROOT="/var/tmp/wrong-notebook-no-images"
 LOCK_FILE=""
 COMMIT_SHA="unknown"
 TIMEZONE="Asia/Shanghai"
+
+configure_safe_path
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -263,9 +426,10 @@ require_cmd mv
 require_cmd chmod
 require_cmd tr
 require_cmd wc
-require_cmd touch
-require_cmd env
-require_cmd uname
+require_cmd stat
+require_cmd id
+
+CURRENT_EUID="$(id -u)"
 
 ensure_absolute_file_arg "$SOURCE_DB" "--source-db"
 ensure_absolute_dir_arg "$OUTPUT_DIR" "--output-dir"
@@ -291,21 +455,12 @@ LOCK_FILE_REAL="$(canonical_dir "$(dirname "$LOCK_FILE")")/$(basename "$LOCK_FIL
 [[ "$OUTPUT_DIR_REAL" != "/" ]] || fail "--output-dir must not resolve to /"
 [[ "$TEMP_ROOT_REAL" != "/" ]] || fail "--temp-root must not resolve to /"
 
-mkdir -p -- "$OUTPUT_DIR_REAL"
-chmod 700 "$OUTPUT_DIR_REAL"
-mkdir -p -- "$TEMP_ROOT_REAL"
-chmod 700 "$TEMP_ROOT_REAL"
-mkdir -p -- "$(dirname "$LOCK_FILE_REAL")"
-chmod 700 "$(dirname "$LOCK_FILE_REAL")"
-
-touch "$LOCK_FILE_REAL"
-chmod 600 "$LOCK_FILE_REAL"
-if [[ "${NO_IMAGE_BACKUP_LOCK_HELD:-0}" != "1" ]]; then
-  exec env NO_IMAGE_BACKUP_LOCK_HELD=1 flock -n -w 1 "$LOCK_FILE_REAL" "$SCRIPT_PATH" "${ORIGINAL_ARGS[@]}"
-fi
+prepare_secure_dir "$OUTPUT_DIR_REAL" "output directory"
+prepare_secure_dir "$TEMP_ROOT_REAL" "temp root directory"
+prepare_secure_lock_file "$LOCK_FILE_REAL"
 
 WORKDIR="$(mktemp -d "${TEMP_ROOT_REAL}/no-image-backup.XXXXXX")"
-chmod 700 "$WORKDIR"
+ensure_secure_existing_dir "$WORKDIR" "temp work directory"
 
 SOURCE_SNAPSHOT="$WORKDIR/source-snapshot.sqlite"
 FINAL_DB_TMP="$WORKDIR/production-no-images.sqlite"
@@ -334,10 +489,10 @@ ARCHIVE_PART="${ARCHIVE_PATH}.part"
 SIDECAR_PATH="${ARCHIVE_PATH}.sha256"
 SIDECAR_PART="${SIDECAR_PATH}.part"
 
-[[ ! -e "$ARCHIVE_PATH" ]] || fail "final archive already exists: $ARCHIVE_PATH"
-[[ ! -e "$SIDECAR_PATH" ]] || fail "final checksum already exists: $SIDECAR_PATH"
-[[ ! -e "$ARCHIVE_PART" ]] || fail "archive .part already exists: $ARCHIVE_PART"
-[[ ! -e "$SIDECAR_PART" ]] || fail "checksum .part already exists: $SIDECAR_PART"
+ensure_publish_target_absent "$ARCHIVE_PATH" "final archive"
+ensure_publish_target_absent "$SIDECAR_PATH" "final checksum"
+ensure_publish_target_absent "$ARCHIVE_PART" "archive .part"
+ensure_publish_target_absent "$SIDECAR_PART" "checksum .part"
 
 sqlite3 -readonly "$(sqlite_cli_path "$SOURCE_DB_REAL")" ".backup '$(sqlite_cli_path "$SOURCE_SNAPSHOT")'"
 check_quick "$SOURCE_SNAPSHOT"
@@ -351,15 +506,19 @@ SOURCE_TABLES="$WORKDIR/source-tables.txt"
 SOURCE_INDEXES="$WORKDIR/source-indexes.txt"
 SOURCE_TRIGGERS="$WORKDIR/source-triggers.txt"
 SOURCE_VIEWS="$WORKDIR/source-views.txt"
+SOURCE_ROW_COUNTS="$WORKDIR/source-row-counts.txt"
 FINAL_TABLES="$WORKDIR/final-tables.txt"
 FINAL_INDEXES="$WORKDIR/final-indexes.txt"
 FINAL_TRIGGERS="$WORKDIR/final-triggers.txt"
 FINAL_VIEWS="$WORKDIR/final-views.txt"
+FINAL_ROW_COUNTS="$WORKDIR/final-row-counts.txt"
 
 write_sorted_schema_list "$SOURCE_SNAPSHOT" table "$SOURCE_TABLES"
 write_sorted_schema_list "$SOURCE_SNAPSHOT" index "$SOURCE_INDEXES"
-write_sorted_schema_list "$SOURCE_SNAPSHOT" trigger "$SOURCE_TRIGGERS"
-write_sorted_schema_list "$SOURCE_SNAPSHOT" view "$SOURCE_VIEWS"
+write_schema_definition_list "$SOURCE_SNAPSHOT" trigger "$SOURCE_TRIGGERS"
+write_schema_definition_list "$SOURCE_SNAPSHOT" view "$SOURCE_VIEWS"
+write_table_row_counts "$SOURCE_SNAPSHOT" "$SOURCE_ROW_COUNTS"
+SOURCE_MIGRATION_COUNT="$(query_single_value "$SOURCE_SNAPSHOT" 'SELECT COUNT(*) FROM "_prisma_migrations";')"
 
 sqlite3 "$(sqlite_cli_path "$SOURCE_SNAPSHOT")" <<'SQL'
 BEGIN IMMEDIATE;
@@ -371,7 +530,7 @@ SQL
 sqlite3 "$(sqlite_cli_path "$SOURCE_SNAPSHOT")" "VACUUM INTO '$(sqlite_cli_path "$FINAL_DB_TMP")';"
 [[ -f "$FINAL_DB_TMP" ]] || fail "VACUUM INTO did not create final database"
 
-rm -f -- "$SOURCE_SNAPSHOT"
+rm -f -- "$SOURCE_SNAPSHOT" "${SOURCE_SNAPSHOT}-journal" "${SOURCE_SNAPSHOT}-wal" "${SOURCE_SNAPSHOT}-shm"
 
 check_quick "$FINAL_DB_TMP"
 check_foreign_keys "$FINAL_DB_TMP"
@@ -388,11 +547,16 @@ PRACTICE_IMAGE_NON_EMPTY_COUNT="$(query_single_value "$FINAL_DB_TMP" "SELECT COU
 
 write_sorted_schema_list "$FINAL_DB_TMP" table "$FINAL_TABLES"
 write_sorted_schema_list "$FINAL_DB_TMP" index "$FINAL_INDEXES"
-write_sorted_schema_list "$FINAL_DB_TMP" trigger "$FINAL_TRIGGERS"
-write_sorted_schema_list "$FINAL_DB_TMP" view "$FINAL_VIEWS"
+write_schema_definition_list "$FINAL_DB_TMP" trigger "$FINAL_TRIGGERS"
+write_schema_definition_list "$FINAL_DB_TMP" view "$FINAL_VIEWS"
+write_table_row_counts "$FINAL_DB_TMP" "$FINAL_ROW_COUNTS"
+FINAL_MIGRATION_COUNT="$(query_single_value "$FINAL_DB_TMP" 'SELECT COUNT(*) FROM "_prisma_migrations";')"
 
 cmp -s "$SOURCE_TABLES" "$FINAL_TABLES" || fail "table set changed during sanitization"
 cmp -s "$SOURCE_INDEXES" "$FINAL_INDEXES" || fail "index set changed during sanitization"
+cmp -s "$SOURCE_TRIGGERS" "$FINAL_TRIGGERS" || fail "trigger definitions changed during sanitization"
+cmp -s "$SOURCE_VIEWS" "$FINAL_VIEWS" || fail "view definitions changed during sanitization"
+cmp -s "$SOURCE_ROW_COUNTS" "$FINAL_ROW_COUNTS" || fail "table row counts changed during sanitization"
 
 SOURCE_TRIGGER_COUNT="$(wc -l < "$SOURCE_TRIGGERS" | tr -d ' ')"
 FINAL_TRIGGER_COUNT="$(wc -l < "$FINAL_TRIGGERS" | tr -d ' ')"
@@ -401,6 +565,7 @@ FINAL_VIEW_COUNT="$(wc -l < "$FINAL_VIEWS" | tr -d ' ')"
 [[ "$SOURCE_TRIGGER_COUNT" == "$FINAL_TRIGGER_COUNT" ]] || fail "trigger count changed during sanitization"
 [[ "$SOURCE_VIEW_COUNT" == "$FINAL_VIEW_COUNT" ]] || fail "view count changed during sanitization"
 grep -qx '_prisma_migrations' "$FINAL_TABLES" || fail "_prisma_migrations table missing from final database"
+[[ "$SOURCE_MIGRATION_COUNT" == "$FINAL_MIGRATION_COUNT" ]] || fail "_prisma_migrations row count changed during sanitization"
 
 DATA_IMAGE_SIGNATURE_FOUND=false
 BASE64_SIGNATURE_FOUND=false
@@ -414,8 +579,8 @@ for signature in 'data:image/' ';base64,' 'image/png' 'image/jpeg' 'image/jpg' '
   fi
 done
 
-mkdir -p -- "$PACKAGE_ROOT/database"
-chmod 700 "$PACKAGE_ROOT" "$PACKAGE_ROOT/database"
+mkdir -m 700 -- "$PACKAGE_ROOT"
+mkdir -m 700 -- "$PACKAGE_ROOT/database"
 cp "$FINAL_DB_TMP" "$PACKAGE_ROOT/database/production-no-images.sqlite"
 chmod 600 "$PACKAGE_ROOT/database/production-no-images.sqlite"
 

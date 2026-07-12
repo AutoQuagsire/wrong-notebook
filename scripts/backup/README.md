@@ -41,6 +41,33 @@ These are recommendations only. This repository does **not** install or run the 
 
 Both directories should use `0700` permissions.
 
+The script does **not** automatically repair permissions on existing directories.
+Administrators must pre-create secure directories and ensure that:
+
+- the directory is owned by the account running the script
+- the directory is **not** a symlink
+- no parent path component is a symlink
+- group and other users do **not** have write permission
+
+If an existing directory does not meet these requirements, the script refuses to run.
+
+## Path and lock safety
+
+- `--source-db`, `--output-dir`, `--temp-root`, and `--lock-file` must use absolute paths
+- single quotes are intentionally rejected to avoid SQLite path injection
+- symlink components are rejected for source, output, temp, and lock paths
+- the lock file must be a regular file owned by the current user
+- the script never auto-`chmod` existing output, temp, or lock directories
+- publish targets fail closed if the final archive, sidecar, or `.part` file already exists
+
+On Linux, the script resets `PATH` to:
+
+```bash
+/usr/sbin:/usr/bin:/sbin:/bin
+```
+
+before resolving external commands, so high-privilege runs do not trust a caller-provided `PATH`.
+
 ## Why this is separate from the full backup
 
 The current production `backup.sh` is a full backup flow and retains complete database content. That is useful for server-side disaster recovery, but it is not suitable for the first-stage offsite package because the final offsite package must exclude all image data.

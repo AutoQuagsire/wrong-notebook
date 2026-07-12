@@ -35,12 +35,40 @@ assert_not_contains_binary() {
   fi
 }
 
+is_group_or_other_writable() {
+  local path="$1"
+  local mode
+  mode="$(stat -c '%a' "$path")"
+  (( (8#$mode & 8#022) != 0 ))
+}
+
+create_test_symlink() {
+  local target="$1"
+  local link_path="$2"
+
+  rm -rf -- "$link_path"
+  if ln -s "$target" "$link_path" 2>/dev/null && [[ -L "$link_path" ]]; then
+    return 0
+  fi
+
+  case "${OSTYPE:-}" in
+    msys*|cygwin*)
+      rm -rf -- "$link_path"
+      /c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "[void](New-Item -ItemType SymbolicLink -Path '$(cygpath -w "$link_path")' -Target '$(cygpath -w "$target")')" >/dev/null 2>&1 || true
+      [[ -L "$link_path" ]] || return 1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 make_fake_dep_bin() {
   local target_dir="$1"
   local skip="$2"
   mkdir -p "$target_dir"
   local dep
-  for dep in tar sha256sum grep flock mktemp date find sort cmp rm mkdir mv chmod sqlite3 awk basename dirname sed cp tr wc touch env uname; do
+  for dep in tar sha256sum grep flock mktemp date find sort cmp rm mkdir mv chmod sqlite3 awk basename dirname sed cp tr wc touch env uname stat id; do
     if [[ "$dep" == "$skip" ]]; then
       continue
     fi
@@ -50,75 +78,6 @@ exec "$(command -v "$dep")" "\$@"
 EOF
     chmod +x "${target_dir}/${dep}"
   done
-}
-
-make_flock_shim_bin() {
-  local target_dir="$1"
-  mkdir -p "$target_dir"
-  cat > "${target_dir}/flock" <<'EOF'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-conflict_exit=1
-command_mode="argv"
-command_string=""
-
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -n|--nonblock|-x|--exclusive|-s|--shared|-o|--close|-F|--no-fork|--verbose)
-      shift
-      ;;
-    -w|--timeout|-E|--conflict-exit-code)
-      [[ $# -ge 2 ]] || exit 64
-      if [[ "$1" == "-E" || "$1" == "--conflict-exit-code" ]]; then
-        conflict_exit="$2"
-      fi
-      shift 2
-      ;;
-    -c|--command)
-      [[ $# -ge 2 ]] || exit 64
-      command_mode="string"
-      command_string="$2"
-      shift 2
-      ;;
-    --)
-      shift
-      break
-      ;;
-    -*)
-      exit 64
-      ;;
-    *)
-      break
-      ;;
-  esac
-done
-
-[[ $# -ge 1 ]] || exit 64
-lock_target="$1"
-shift
-
-if [[ "$lock_target" =~ ^[0-9]+$ ]]; then
-  exit 64
-fi
-
-lock_dir="${lock_target}.lockdir"
-if ! mkdir "$lock_dir" 2>/dev/null; then
-  exit "$conflict_exit"
-fi
-
-cleanup() {
-  rmdir "$lock_dir" 2>/dev/null || true
-}
-trap cleanup EXIT
-
-if [[ "$command_mode" == "string" ]]; then
-  bash -lc "$command_string"
-elif [[ $# -gt 0 ]]; then
-  "$@"
-fi
-EOF
-  chmod +x "${target_dir}/flock"
 }
 
 create_fixture_db() {
@@ -216,6 +175,10 @@ require_cmd bash
 require_cmd sqlite3
 require_cmd tar
 require_cmd sha256sum
+require_cmd flock
+require_cmd stat
+require_cmd chmod
+require_cmd cmd
 
 [[ -f "$TARGET_SCRIPT" ]] || fail "target script not found: $TARGET_SCRIPT"
 
@@ -234,21 +197,32 @@ TEMP_ROOT="${BASE_DIR}/temp root"
 EXTRACT_DIR="${BASE_DIR}/extracted"
 LOCK_FILE="${BASE_DIR}/backup.lock"
 MISSING_DEP_BIN="${BASE_DIR}/fake-bin"
-FLOCK_SHIM_BIN="${BASE_DIR}/flock-shim-bin"
 FAIL_OUTPUT_DIR="${BASE_DIR}/failure output"
 MISSING_SOURCE="${BASE_DIR}/missing.db"
 BROKEN_DB="${BASE_DIR}/broken.db"
-TEST_PATH=""
+READONLY_SOURCE_DB="${BASE_DIR}/readonly-source.db"
+INSECURE_OUTPUT_DIR="${BASE_DIR}/insecure-output"
+INSECURE_TEMP_ROOT="${BASE_DIR}/insecure-temp"
+LOCK_DIR_AS_DIRECTORY="${BASE_DIR}/lock-is-dir"
+LOCK_SYMLINK_TARGET="${BASE_DIR}/lock-target"
+LOCK_SYMLINK_PATH="${BASE_DIR}/lock-symlink"
+LOCK_INSECURE_FILE="${BASE_DIR}/lock-insecure"
+SYMLINK_OUTPUT_REAL="${BASE_DIR}/symlink-output-real"
+SYMLINK_OUTPUT_PATH="${BASE_DIR}/symlink-output-link"
+SYMLINK_TEMP_REAL="${BASE_DIR}/symlink-temp-real"
+SYMLINK_TEMP_PATH="${BASE_DIR}/symlink-temp-link"
 
 mkdir -p "$OUTPUT_DIR" "$TEMP_ROOT" "$EXTRACT_DIR" "$FAIL_OUTPUT_DIR"
 
 create_fixture_db "$SOURCE_DB"
 SOURCE_SHA_BEFORE="$(sha256sum "$SOURCE_DB" | awk '{print $1}')"
-make_flock_shim_bin "$FLOCK_SHIM_BIN"
-TEST_PATH="${FLOCK_SHIM_BIN}:$PATH"
+SOURCE_MTIME_BEFORE="$(stat -c '%Y' "$SOURCE_DB")"
+
+cp "$SOURCE_DB" "$READONLY_SOURCE_DB"
+chmod 400 "$READONLY_SOURCE_DB"
 
 RUN_OUTPUT="$(
-  PATH="$TEST_PATH" bash "$TARGET_SCRIPT" \
+  bash "$TARGET_SCRIPT" \
     --source-db "$SOURCE_DB" \
     --output-dir "$OUTPUT_DIR" \
     --temp-root "$TEMP_ROOT" \
@@ -335,53 +309,175 @@ assert_not_contains_binary "$FINAL_DB" 'iVBORw0KGgo'
 assert_not_contains_binary "$FINAL_DB" 'answer-photo'
 
 SOURCE_SHA_AFTER="$(sha256sum "$SOURCE_DB" | awk '{print $1}')"
+SOURCE_MTIME_AFTER="$(stat -c '%Y' "$SOURCE_DB")"
 assert_eq "$SOURCE_SHA_BEFORE" "$SOURCE_SHA_AFTER"
+assert_eq "$SOURCE_MTIME_BEFORE" "$SOURCE_MTIME_AFTER"
 assert_contains "$SOURCE_DB" 'data:image/png;base64'
 assert_contains "$SOURCE_DB" 'data:image/jpeg;base64'
+
+READONLY_SHA_BEFORE="$(sha256sum "$READONLY_SOURCE_DB" | awk '{print $1}')"
+READONLY_MTIME_BEFORE="$(stat -c '%Y' "$READONLY_SOURCE_DB")"
+READONLY_OUTPUT_DIR="${BASE_DIR}/readonly output"
+READONLY_TEMP_ROOT="${BASE_DIR}/readonly temp"
+mkdir -p "$READONLY_OUTPUT_DIR" "$READONLY_TEMP_ROOT"
+bash "$TARGET_SCRIPT" \
+  --source-db "$READONLY_SOURCE_DB" \
+  --output-dir "$READONLY_OUTPUT_DIR" \
+  --temp-root "$READONLY_TEMP_ROOT" >/dev/null
+READONLY_SHA_AFTER="$(sha256sum "$READONLY_SOURCE_DB" | awk '{print $1}')"
+READONLY_MTIME_AFTER="$(stat -c '%Y' "$READONLY_SOURCE_DB")"
+assert_eq "$READONLY_SHA_BEFORE" "$READONLY_SHA_AFTER"
+assert_eq "$READONLY_MTIME_BEFORE" "$READONLY_MTIME_AFTER"
+assert_contains "$READONLY_SOURCE_DB" 'data:image/png;base64'
 
 if find "$TEMP_ROOT" -type f \( -name 'source-snapshot.sqlite' -o -name '*.part' \) | grep -q .; then
   fail "temporary snapshot or stray .part files left behind in temp root"
 fi
 
 set +e
-PATH="$TEST_PATH" bash "$TARGET_SCRIPT" --source-db "$MISSING_SOURCE" --output-dir "$FAIL_OUTPUT_DIR" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+bash "$TARGET_SCRIPT" --source-db "$MISSING_SOURCE" --output-dir "$FAIL_OUTPUT_DIR" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
 STATUS_MISSING=$?
 set -e
 [[ $STATUS_MISSING -ne 0 ]] || fail "missing source database should fail"
 
 set +e
-PATH="$TEST_PATH" bash "$TARGET_SCRIPT" --source-db "$SOURCE_DB" --output-dir "/" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+bash "$TARGET_SCRIPT" --source-db "$SOURCE_DB" --output-dir "/" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
 STATUS_DANGEROUS=$?
 set -e
 [[ $STATUS_DANGEROUS -ne 0 ]] || fail "dangerous output-dir should fail"
 
 create_missing_column_db "$BROKEN_DB"
 set +e
-PATH="$TEST_PATH" bash "$TARGET_SCRIPT" --source-db "$BROKEN_DB" --output-dir "$FAIL_OUTPUT_DIR" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+bash "$TARGET_SCRIPT" --source-db "$BROKEN_DB" --output-dir "$FAIL_OUTPUT_DIR" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
 STATUS_BROKEN=$?
 set -e
 [[ $STATUS_BROKEN -ne 0 ]] || fail "missing required columns should fail"
 
-make_fake_dep_bin "$MISSING_DEP_BIN" "sqlite3"
-set +e
-PATH="$MISSING_DEP_BIN:$FLOCK_SHIM_BIN" bash "$TARGET_SCRIPT" --source-db "$SOURCE_DB" --output-dir "$FAIL_OUTPUT_DIR" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
-STATUS_DEPS=$?
-set -e
-[[ $STATUS_DEPS -ne 0 ]] || fail "missing sqlite3 dependency should fail"
+if [[ "${OSTYPE:-}" != linux* ]]; then
+  make_fake_dep_bin "$MISSING_DEP_BIN" "sqlite3"
+  set +e
+  PATH="$MISSING_DEP_BIN" bash "$TARGET_SCRIPT" --source-db "$SOURCE_DB" --output-dir "$FAIL_OUTPUT_DIR" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+  STATUS_DEPS=$?
+  set -e
+  [[ $STATUS_DEPS -ne 0 ]] || fail "missing sqlite3 dependency should fail"
+fi
 
 LOCK_HOLD_FILE="${BASE_DIR}/held.lock"
-PATH="$TEST_PATH" flock -n "$LOCK_HOLD_FILE" bash -lc 'sleep 5' &
-LOCK_HOLDER_PID=$!
-sleep 1
+exec 9>>"$LOCK_HOLD_FILE"
+flock -n 9 || fail "failed to acquire primary lock for competition test"
 set +e
-PATH="$TEST_PATH" NO_IMAGE_BACKUP_LOCK_FILE="$LOCK_HOLD_FILE" bash "$TARGET_SCRIPT" \
+bash "$TARGET_SCRIPT" \
   --source-db "$SOURCE_DB" \
   --output-dir "$FAIL_OUTPUT_DIR" \
-  --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+  --temp-root "$TEMP_ROOT" \
+  --lock-file "$LOCK_HOLD_FILE" >/dev/null 2>&1
 STATUS_LOCK=$?
 set -e
 [[ $STATUS_LOCK -ne 0 ]] || fail "second instance should fail to acquire lock"
-wait "$LOCK_HOLDER_PID"
+exec 9>&-
+
+mkdir -p "$SYMLINK_OUTPUT_REAL" "$SYMLINK_TEMP_REAL"
+if create_test_symlink "$SYMLINK_OUTPUT_REAL" "$SYMLINK_OUTPUT_PATH" && create_test_symlink "$SYMLINK_TEMP_REAL" "$SYMLINK_TEMP_PATH"; then
+  set +e
+  bash "$TARGET_SCRIPT" --source-db "$SOURCE_DB" --output-dir "$SYMLINK_OUTPUT_PATH" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+  STATUS_OUTPUT_LINK=$?
+  set -e
+  [[ $STATUS_OUTPUT_LINK -ne 0 ]] || fail "symlink output-dir should fail"
+
+  set +e
+  bash "$TARGET_SCRIPT" --source-db "$SOURCE_DB" --output-dir "$OUTPUT_DIR" --temp-root "$SYMLINK_TEMP_PATH" >/dev/null 2>&1
+  STATUS_TEMP_LINK=$?
+  set -e
+  [[ $STATUS_TEMP_LINK -ne 0 ]] || fail "symlink temp-root should fail"
+else
+  printf 'Skipping symlink directory tests on this host.\n' >&2
+fi
+
+touch "$LOCK_SYMLINK_TARGET"
+if create_test_symlink "$LOCK_SYMLINK_TARGET" "$LOCK_SYMLINK_PATH"; then
+  set +e
+  bash "$TARGET_SCRIPT" \
+    --source-db "$SOURCE_DB" \
+    --output-dir "$OUTPUT_DIR" \
+    --temp-root "$TEMP_ROOT" \
+    --lock-file "$LOCK_SYMLINK_PATH" >/dev/null 2>&1
+  STATUS_LOCK_LINK=$?
+  set -e
+  [[ $STATUS_LOCK_LINK -ne 0 ]] || fail "symlink lock-file should fail"
+else
+  printf 'Skipping symlink lock-file test on this host.\n' >&2
+fi
+
+mkdir -p "$LOCK_DIR_AS_DIRECTORY"
+set +e
+bash "$TARGET_SCRIPT" \
+  --source-db "$SOURCE_DB" \
+  --output-dir "$OUTPUT_DIR" \
+  --temp-root "$TEMP_ROOT" \
+  --lock-file "$LOCK_DIR_AS_DIRECTORY" >/dev/null 2>&1
+STATUS_LOCK_DIR=$?
+set -e
+[[ $STATUS_LOCK_DIR -ne 0 ]] || fail "directory lock-file should fail"
+
+touch "$LOCK_INSECURE_FILE"
+chmod 666 "$LOCK_INSECURE_FILE"
+if is_group_or_other_writable "$LOCK_INSECURE_FILE"; then
+  set +e
+  bash "$TARGET_SCRIPT" \
+    --source-db "$SOURCE_DB" \
+    --output-dir "$OUTPUT_DIR" \
+    --temp-root "$TEMP_ROOT" \
+    --lock-file "$LOCK_INSECURE_FILE" >/dev/null 2>&1
+  STATUS_LOCK_MODE=$?
+  set -e
+  [[ $STATUS_LOCK_MODE -ne 0 ]] || fail "group/other writable lock-file should fail"
+else
+  printf 'Skipping writable lock-file permission test on this host.\n' >&2
+fi
+
+mkdir -p "$INSECURE_OUTPUT_DIR" "$INSECURE_TEMP_ROOT"
+chmod 733 "$INSECURE_OUTPUT_DIR" "$INSECURE_TEMP_ROOT"
+OUTPUT_MODE_BEFORE="$(stat -c '%a' "$INSECURE_OUTPUT_DIR")"
+TEMP_MODE_BEFORE="$(stat -c '%a' "$INSECURE_TEMP_ROOT")"
+if is_group_or_other_writable "$INSECURE_OUTPUT_DIR"; then
+  set +e
+  bash "$TARGET_SCRIPT" --source-db "$SOURCE_DB" --output-dir "$INSECURE_OUTPUT_DIR" --temp-root "$TEMP_ROOT" >/dev/null 2>&1
+  STATUS_INSECURE_OUTPUT=$?
+  set -e
+  [[ $STATUS_INSECURE_OUTPUT -ne 0 ]] || fail "group/other writable output-dir should fail"
+  assert_eq "$(stat -c '%a' "$INSECURE_OUTPUT_DIR")" "$OUTPUT_MODE_BEFORE"
+else
+  printf 'Skipping writable output-dir permission test on this host.\n' >&2
+fi
+
+if is_group_or_other_writable "$INSECURE_TEMP_ROOT"; then
+  set +e
+  bash "$TARGET_SCRIPT" --source-db "$SOURCE_DB" --output-dir "$OUTPUT_DIR" --temp-root "$INSECURE_TEMP_ROOT" >/dev/null 2>&1
+  STATUS_INSECURE_TEMP=$?
+  set -e
+  [[ $STATUS_INSECURE_TEMP -ne 0 ]] || fail "group/other writable temp-root should fail"
+  assert_eq "$(stat -c '%a' "$INSECURE_TEMP_ROOT")" "$TEMP_MODE_BEFORE"
+else
+  printf 'Skipping writable temp-root permission test on this host.\n' >&2
+fi
+
+if [[ "${OSTYPE:-}" == linux* ]]; then
+  EVIL_BIN="${BASE_DIR}/evil-bin"
+  mkdir -p "$EVIL_BIN"
+  cat > "${EVIL_BIN}/sqlite3" <<'EOF'
+#!/usr/bin/env bash
+echo "evil sqlite3 should not run" >&2
+exit 99
+EOF
+  chmod +x "${EVIL_BIN}/sqlite3"
+  SAFE_PATH_OUTPUT_DIR="${BASE_DIR}/safe-path-output"
+  SAFE_PATH_TEMP_ROOT="${BASE_DIR}/safe-path-temp"
+  mkdir -p "$SAFE_PATH_OUTPUT_DIR" "$SAFE_PATH_TEMP_ROOT"
+  PATH="$EVIL_BIN:$PATH" bash "$TARGET_SCRIPT" \
+    --source-db "$SOURCE_DB" \
+    --output-dir "$SAFE_PATH_OUTPUT_DIR" \
+    --temp-root "$SAFE_PATH_TEMP_ROOT" >/dev/null
+fi
 
 if find "$TEMP_ROOT" -type f \( -name 'source-snapshot.sqlite' -o -name '*.part' \) | grep -q .; then
   fail "failure path left temporary snapshot or .part files behind"
