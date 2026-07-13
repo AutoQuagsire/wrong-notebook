@@ -6,6 +6,14 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Clock3, ChevronDown, Eye, History, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
@@ -15,6 +23,7 @@ import { PracticeRecordData } from "@/types/api";
 
 interface ReviewItem {
     id: string;
+    masteryLevel: number;
     questionText?: string | null;
     ocrText?: string | null;
     answerText?: string | null;
@@ -89,6 +98,9 @@ export default function ReviewPage() {
     const [item, setItem] = useState<ReviewItem | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [masteryDialogOpen, setMasteryDialogOpen] = useState(false);
+    const [masterySubmitting, setMasterySubmitting] = useState(false);
+    const [masteryError, setMasteryError] = useState<string | null>(null);
 
     const [answerText, setAnswerText] = useState("");
     const [answerImageUrl, setAnswerImageUrl] = useState<string | null>(null);
@@ -115,6 +127,8 @@ export default function ReviewPage() {
         return item.questionText || item.ocrText || "暂无题目内容";
     }, [item]);
 
+    const isMastered = item?.masteryLevel === 2;
+
     useEffect(() => {
         startTimeRef.current = Date.now();
         setElapsedSeconds(0);
@@ -122,6 +136,9 @@ export default function ReviewPage() {
         setAnswerVisible(false);
         setSavedRecord(null);
         setSubmitError(null);
+        setMasteryDialogOpen(false);
+        setMasterySubmitting(false);
+        setMasteryError(null);
 
         if (!errorItemId) {
             setLoadError("缺少错题 ID");
@@ -259,6 +276,29 @@ export default function ReviewPage() {
         }
     };
 
+    const handleMarkMastered = async () => {
+        if (!item || isMastered || masterySubmitting) {
+            return;
+        }
+
+        setMasterySubmitting(true);
+        setMasteryError(null);
+
+        try {
+            const updated = await apiClient.patch<{ id: string; masteryLevel: number }>(
+                `/api/error-items/${item.id}/mastery`,
+                { masteryLevel: 2 },
+            );
+
+            setItem(prev => prev ? { ...prev, masteryLevel: updated.masteryLevel } : prev);
+            setMasteryDialogOpen(false);
+        } catch (error) {
+            setMasteryError(getErrorMessage(error, "设置已掌握失败，请稍后重试。"));
+        } finally {
+            setMasterySubmitting(false);
+        }
+    };
+
     if (loading) {
         return (
             <main className="min-h-screen bg-background">
@@ -296,25 +336,96 @@ export default function ReviewPage() {
     return (
         <main className="min-h-screen bg-background">
             <div className="container mx-auto space-y-6 p-4 pb-8">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
                         <Button variant="ghost" onClick={() => router.back()}>
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             返回
                         </Button>
-                        <div>
+                        <div className="min-w-0">
                             <h1 className="text-2xl font-bold">复习原题</h1>
                             <p className="text-sm text-muted-foreground">
-                                仅记录本次复习过程，不自动判题，不更新掌握状态。
+                                默认仅记录本次复习过程，不自动判题；点击“设为已掌握”时才会更新掌握状态。
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm">
-                        <Clock3 className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">独立作答计时</span>
-                        <span className="font-semibold">{formatDuration(lockedDurationSeconds ?? elapsedSeconds)}</span>
+                    <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
+                        <Button
+                            type="button"
+                            variant={isMastered ? "secondary" : "outline"}
+                            disabled={isMastered || masterySubmitting}
+                            onClick={() => {
+                                setMasteryError(null);
+                                setMasteryDialogOpen(true);
+                            }}
+                            className="w-full sm:w-auto"
+                        >
+                            {masterySubmitting ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : isMastered ? (
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                            ) : null}
+                            {masterySubmitting ? "正在设置…" : isMastered ? "已掌握" : "设为已掌握"}
+                        </Button>
+                        <div className="flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm">
+                            <Clock3 className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-muted-foreground">独立作答计时</span>
+                            <span className="font-semibold">{formatDuration(lockedDurationSeconds ?? elapsedSeconds)}</span>
+                        </div>
                     </div>
                 </div>
+                {masteryError ? (
+                    <p className="text-sm text-red-600">{masteryError}</p>
+                ) : null}
+
+                <Dialog open={masteryDialogOpen} onOpenChange={(open) => {
+                    if (masterySubmitting) {
+                        return;
+                    }
+                    setMasteryDialogOpen(open);
+                    if (!open) {
+                        setMasteryError(null);
+                    }
+                }}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>确认设为已掌握？</DialogTitle>
+                            <DialogDescription>
+                                设为已掌握后，本题将不再进入正常复习队列，但仍会保留在错题本中，历史作答和笔记不会删除。
+                            </DialogDescription>
+                        </DialogHeader>
+                        {masteryError ? (
+                            <p className="text-sm text-red-600">{masteryError}</p>
+                        ) : null}
+                        <DialogFooter className="gap-2 sm:gap-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                    setMasteryDialogOpen(false);
+                                    setMasteryError(null);
+                                }}
+                                disabled={masterySubmitting}
+                            >
+                                取消
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={handleMarkMastered}
+                                disabled={masterySubmitting || isMastered}
+                            >
+                                {masterySubmitting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        正在设置…
+                                    </>
+                                ) : (
+                                    "确认设为已掌握"
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
                 <Card>
                     <CardHeader>
