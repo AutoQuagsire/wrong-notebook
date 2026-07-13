@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
             id: 'user-123',
             email: 'user@example.com',
             name: 'Test User',
+            role: 'admin',
         },
         expires: '2025-12-31',
     },

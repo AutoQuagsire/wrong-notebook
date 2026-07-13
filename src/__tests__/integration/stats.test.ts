@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
     mockPrismaErrorItem: {
         deleteMany: vi.fn(),
     },
+    mockPrismaSubject: {
+        findMany: vi.fn(),
+    },
     mockSession: {
         user: {
             id: 'user-123',
@@ -30,6 +33,7 @@ vi.mock('@/lib/prisma', () => ({
     prisma: {
         practiceRecord: mocks.mockPrismaPracticeRecord,
         errorItem: mocks.mockPrismaErrorItem,
+        subject: mocks.mockPrismaSubject,
     },
 }));
 
@@ -52,6 +56,11 @@ describe('/api/stats', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(getServerSession).mockResolvedValue(mocks.mockSession);
+        mocks.mockPrismaPracticeRecord.count.mockResolvedValue(0);
+        mocks.mockPrismaSubject.findMany.mockResolvedValue([
+            { id: 'subject-math', name: '数学' },
+            { id: 'subject-english', name: '英语' },
+        ]);
     });
 
     describe('GET /api/stats/practice (获取练习统计)', () => {
@@ -77,6 +86,15 @@ describe('/api/stats', () => {
 
             // Mock total and correct counts
             mocks.mockPrismaPracticeRecord.count
+                .mockResolvedValueOnce(15)
+                .mockResolvedValueOnce(10)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
                 .mockResolvedValueOnce(15)
                 .mockResolvedValueOnce(10);
 
@@ -112,8 +130,17 @@ describe('/api/stats', () => {
             mocks.mockPrismaPracticeRecord.groupBy.mockResolvedValue([]);
             mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([]);
             mocks.mockPrismaPracticeRecord.count
-                .mockResolvedValueOnce(100) // total
-                .mockResolvedValueOnce(75);  // correct
+                .mockResolvedValueOnce(100)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(100)
+                .mockResolvedValueOnce(75);
 
             const request = new Request('http://localhost/api/stats/practice');
             const response = await GET_PRACTICE_STATS(request);
@@ -136,7 +163,7 @@ describe('/api/stats', () => {
 
             expect(response.status).toBe(200);
             expect(data.overallStats.total).toBe(0);
-            expect(data.overallStats.rate).toBe(0);
+            expect(data.overallStats.rate).toBe('0.0');
         });
 
         it('应该拒绝未登录用户', async () => {
@@ -165,7 +192,7 @@ describe('/api/stats', () => {
         });
 
         it('应该处理数据库错误', async () => {
-            mocks.mockPrismaPracticeRecord.groupBy.mockRejectedValue(
+            mocks.mockPrismaPracticeRecord.count.mockRejectedValueOnce(
                 new Error('Database connection failed')
             );
 
