@@ -37,7 +37,7 @@ test('Upload image, correct, save, and verify in notebook', async ({ page }) => 
     try {
         await expect(page.getByRole('link', { name: '数学' })).toBeVisible({ timeout: 3000 });
         console.log('Notebook math already exists.');
-    } catch (e) {
+    } catch {
         console.log('Notebook math not found, creating...');
         // Create it
         await page.getByRole('button', { name: /新建|New|Create/ }).first().click();
@@ -98,8 +98,10 @@ test('Upload image, correct, save, and verify in notebook', async ({ page }) => 
     // Click "Save to Notebook" / "保存"
     await page.getByRole('button', { name: /保存|Save/ }).click();
 
-    // 10. Verify Redirection and Content
-    // Should redirect to /notebooks/[id]
+    // 10. Verify homepage return, then open the notebook to verify persisted content
+    await page.waitForURL('**/', { timeout: 10000 });
+    await page.goto('/notebooks');
+    await page.getByRole('link', { name: '数学' }).click();
     await page.waitForURL(/\/notebooks\/.+/, { timeout: 10000 });
 
     // Verify headers or content
