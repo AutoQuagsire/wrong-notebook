@@ -34,8 +34,9 @@ test('Upload image, correct, save, and verify in notebook', async ({ page }) => 
     await page.goto('/notebooks');
 
     // Check if "数学" exists, if not create it
+    const getMathNotebookCard = () => page.locator('.group').filter({ hasText: '数学' }).first();
     try {
-        await expect(page.getByRole('link', { name: '数学' })).toBeVisible({ timeout: 3000 });
+        await expect(getMathNotebookCard()).toBeVisible({ timeout: 3000 });
         console.log('Notebook math already exists.');
     } catch {
         console.log('Notebook math not found, creating...');
@@ -101,7 +102,8 @@ test('Upload image, correct, save, and verify in notebook', async ({ page }) => 
     // 10. Verify homepage return, then open the notebook to verify persisted content
     await page.waitForURL('**/', { timeout: 10000 });
     await page.goto('/notebooks');
-    await page.getByRole('link', { name: '数学' }).click();
+    await expect(getMathNotebookCard()).toBeVisible({ timeout: 5000 });
+    await getMathNotebookCard().click();
     await page.waitForURL(/\/notebooks\/.+/, { timeout: 10000 });
 
     // Verify headers or content
