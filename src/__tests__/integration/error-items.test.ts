@@ -513,14 +513,14 @@ describe('/api/error-items', () => {
             mocks.mockPrismaErrorItem.count.mockResolvedValue(0);
             mocks.mockPrismaErrorItem.findMany.mockResolvedValue([]);
 
-            const request = new Request('http://localhost/api/error-items/list?mastery=1');
+            const request = new Request('http://localhost/api/error-items/list?mastery=2');
             const response = await GET_LIST(request);
 
             expect(response.status).toBe(200);
             expect(mocks.mockPrismaErrorItem.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     where: expect.objectContaining({
-                        masteryLevel: { gt: 0 },
+                        masteryLevel: 2,
                     }),
                 })
             );
@@ -859,7 +859,7 @@ describe('/api/error-items', () => {
         });
 
         it('应该支持不同级别的掌握程度', async () => {
-            const levels = [0, 1, 2, 3];
+            const levels = [0, 1, 2];
 
             for (const level of levels) {
                 // Mock ownership check (findUnique)
@@ -882,6 +882,21 @@ describe('/api/error-items', () => {
                 const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
                 expect(response.status).toBe(200);
             }
+        });
+
+        it('应该拒绝非法掌握程度', async () => {
+            const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
+                method: 'PATCH',
+                body: JSON.stringify({ masteryLevel: 3 }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('masteryLevel must be 0, 1, or 2');
+            expect(mocks.mockPrismaErrorItem.update).not.toHaveBeenCalled();
         });
 
         it('应该拒绝未登录用户', async () => {
