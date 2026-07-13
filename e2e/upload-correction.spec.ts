@@ -113,14 +113,21 @@ test('Upload image, correct, save, and verify in notebook', async ({ page }) => 
     await expect(page.locator('.badge, .inline-flex').filter({ hasText: /待复习|Review/ }).first()).toBeVisible();
 
     // Open the item detail to verify persisted question text and tags.
-    const notebookUrl = page.url();
     const firstErrorItem = page.locator('a[href^="/error-items/"]').first();
     await expect(firstErrorItem).toBeVisible({ timeout: 5000 });
     await firstErrorItem.click();
     await page.waitForURL(/\/error-items\/.+/, { timeout: 10000 });
     await expect(page.locator('body')).toContainText('试题：2 + 2 = ?');
     await expect(page.locator('body')).toContainText('Addition');
-    await page.goto(notebookUrl);
+
+    // Delete the verified item from its detail page before returning to notebook cleanup.
+    page.once('dialog', async dialog => {
+        console.log(`Item Delete Dialog: ${dialog.message()}`);
+        await dialog.accept();
+    });
+    await page.getByRole('button', { name: /删除|Delete/ }).click();
+    await page.waitForURL(/\/notebooks\/.+/, { timeout: 5000 });
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
     // 11. Delete ALL Error Items (Cleanup) to ensure notebook can be deleted
     while (true) {
