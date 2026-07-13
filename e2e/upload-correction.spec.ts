@@ -109,15 +109,18 @@ test('Upload image, correct, save, and verify in notebook', async ({ page }) => 
     // Verify headers or content
     await expect(page.getByRole('heading', { level: 1 })).toContainText('数学');
 
-    // Verify the new item is present
-    // Question text should be "试题：2 + 2 = ?"
-    await expect(page.locator('body')).toContainText('试题：2 + 2 = ?');
-
-    // Verify Tags
-    await expect(page.locator('body')).toContainText('Addition');
-
     // Verify Mastery Status (To Review / 待复习)
     await expect(page.locator('.badge, .inline-flex').filter({ hasText: /待复习|Review/ }).first()).toBeVisible();
+
+    // Open the item detail to verify persisted question text and tags.
+    const notebookUrl = page.url();
+    const firstErrorItem = page.locator('a[href^="/error-items/"]').first();
+    await expect(firstErrorItem).toBeVisible({ timeout: 5000 });
+    await firstErrorItem.click();
+    await page.waitForURL(/\/error-items\/.+/, { timeout: 10000 });
+    await expect(page.locator('body')).toContainText('试题：2 + 2 = ?');
+    await expect(page.locator('body')).toContainText('Addition');
+    await page.goto(notebookUrl);
 
     // 11. Delete ALL Error Items (Cleanup) to ensure notebook can be deleted
     while (true) {
