@@ -34,10 +34,11 @@ test('Upload image, correct, save, and verify in notebook', async ({ page }) => 
     await page.goto('/notebooks');
 
     // Check if "数学" exists, if not create it
+    const getMathNotebookCard = () => page.locator('.group').filter({ hasText: '数学' }).first();
     try {
-        await expect(page.getByRole('link', { name: '数学' })).toBeVisible({ timeout: 3000 });
+        await expect(getMathNotebookCard()).toBeVisible({ timeout: 3000 });
         console.log('Notebook math already exists.');
-    } catch (e) {
+    } catch {
         console.log('Notebook math not found, creating...');
         // Create it
         await page.getByRole('button', { name: /新建|New|Create/ }).first().click();
@@ -98,22 +99,35 @@ test('Upload image, correct, save, and verify in notebook', async ({ page }) => 
     // Click "Save to Notebook" / "保存"
     await page.getByRole('button', { name: /保存|Save/ }).click();
 
-    // 10. Verify Redirection and Content
-    // Should redirect to /notebooks/[id]
+    // 10. Verify homepage return, then open the notebook to verify persisted content
+    await page.waitForURL('**/', { timeout: 10000 });
+    await page.goto('/notebooks');
+    await expect(getMathNotebookCard()).toBeVisible({ timeout: 5000 });
+    await getMathNotebookCard().click();
     await page.waitForURL(/\/notebooks\/.+/, { timeout: 10000 });
 
     // Verify headers or content
     await expect(page.getByRole('heading', { level: 1 })).toContainText('数学');
 
-    // Verify the new item is present
-    // Question text should be "试题：2 + 2 = ?"
-    await expect(page.locator('body')).toContainText('试题：2 + 2 = ?');
-
-    // Verify Tags
-    await expect(page.locator('body')).toContainText('Addition');
-
     // Verify Mastery Status (To Review / 待复习)
     await expect(page.locator('.badge, .inline-flex').filter({ hasText: /待复习|Review/ }).first()).toBeVisible();
+
+    // Open the item detail to verify persisted question text and tags.
+    const firstErrorItem = page.locator('a[href^="/error-items/"]').first();
+    await expect(firstErrorItem).toBeVisible({ timeout: 5000 });
+    await firstErrorItem.click();
+    await page.waitForURL(/\/error-items\/.+/, { timeout: 10000 });
+    await expect(page.locator('body')).toContainText('试题：2 + 2 = ?');
+    await expect(page.locator('body')).toContainText('Addition');
+
+    // Delete the verified item from its detail page before returning to notebook cleanup.
+    page.once('dialog', async dialog => {
+        console.log(`Item Delete Dialog: ${dialog.message()}`);
+        await dialog.accept();
+    });
+    await page.getByRole('button', { name: /删除|Delete/ }).click();
+    await page.waitForURL(/\/notebooks\/.+/, { timeout: 5000 });
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
     // 11. Delete ALL Error Items (Cleanup) to ensure notebook can be deleted
     while (true) {

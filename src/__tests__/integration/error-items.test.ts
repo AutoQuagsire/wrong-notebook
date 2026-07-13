@@ -858,8 +858,11 @@ describe('/api/error-items', () => {
             expect(data.masteryLevel).toBe(0);
         });
 
-        it('应该只支持 0、1、2 三种掌握程度', async () => {
-            for (const level of [0, 1, 2]) {
+        it('应该支持不同级别的掌握程度', async () => {
+            const levels = [0, 1, 2];
+
+            for (const level of levels) {
+                // Mock ownership check (findUnique)
                 mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
                     id: 'error-item-1',
                     userId: 'user-123',
@@ -881,7 +884,7 @@ describe('/api/error-items', () => {
             }
         });
 
-        it('应该拒绝非法 masteryLevel', async () => {
+        it('应该拒绝非法掌握程度', async () => {
             const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
                 method: 'PATCH',
                 body: JSON.stringify({ masteryLevel: 3 }),
@@ -893,6 +896,7 @@ describe('/api/error-items', () => {
 
             expect(response.status).toBe(400);
             expect(data.message).toBe('masteryLevel must be 0, 1, or 2');
+            expect(mocks.mockPrismaErrorItem.update).not.toHaveBeenCalled();
         });
 
         it('应该拒绝未登录用户', async () => {
