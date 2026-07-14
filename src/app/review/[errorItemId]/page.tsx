@@ -352,25 +352,32 @@ export default function ReviewPage() {
                     <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
                         <Button
                             type="button"
-                            variant={isMastered ? "secondary" : "outline"}
+                            variant="default"
                             disabled={isMastered || masterySubmitting}
                             onClick={() => {
                                 setMasteryError(null);
                                 setMasteryDialogOpen(true);
                             }}
-                            className="w-full sm:w-auto"
+                            className={[
+                                "h-11 w-full rounded-full px-5 text-sm font-semibold shadow-sm transition-all sm:w-auto",
+                                "gap-2.5",
+                                isMastered
+                                    ? "bg-emerald-600 text-white hover:bg-emerald-600"
+                                    : "bg-foreground text-background hover:bg-foreground/90",
+                            ].join(" ")}
                         >
                             {masterySubmitting ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : isMastered ? (
-                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             ) : null}
-                            {masterySubmitting ? "正在设置…" : isMastered ? "已掌握" : "设为已掌握"}
+                            {!masterySubmitting ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                            ) : null}
+                            {masterySubmitting ? "正在设置…" : isMastered ? "已掌握" : "标记为已掌握"}
                         </Button>
-                        <div className="flex items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm">
+                        <div className="flex min-h-11 items-center gap-2 rounded-full border bg-card px-4 py-2 text-sm shadow-xs">
                             <Clock3 className="h-4 w-4 text-muted-foreground" />
                             <span className="text-muted-foreground">独立作答计时</span>
-                            <span className="font-semibold">{formatDuration(lockedDurationSeconds ?? elapsedSeconds)}</span>
+                            <span className="font-semibold tabular-nums">{formatDuration(lockedDurationSeconds ?? elapsedSeconds)}</span>
                         </div>
                     </div>
                 </div>

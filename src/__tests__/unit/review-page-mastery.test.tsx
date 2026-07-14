@@ -184,7 +184,7 @@ describe("ReviewPage mastery action", () => {
         });
         await flush();
 
-        const openDialogButton = getButtonByText(container, "设为已掌握");
+        const openDialogButton = getButtonByText(container, "标记为已掌握");
         expect(openDialogButton).toBeDefined();
         expect(openDialogButton?.disabled).toBe(false);
 
@@ -215,7 +215,7 @@ describe("ReviewPage mastery action", () => {
         const masteredButton = getButtonByText(container, "已掌握");
         expect(masteredButton).toBeDefined();
         expect(masteredButton?.disabled).toBe(true);
-        expect(getButtonByText(container, "设为已掌握")).toBeUndefined();
+        expect(getButtonByText(container, "标记为已掌握")).toBeUndefined();
         expect(mocks.apiClient.patch).toHaveBeenCalledTimes(1);
 
         await act(async () => {
@@ -239,7 +239,7 @@ describe("ReviewPage mastery action", () => {
         });
         await flush();
 
-        const openDialogButton = getButtonByText(container, "设为已掌握");
+        const openDialogButton = getButtonByText(container, "标记为已掌握");
         expect(openDialogButton).toBeDefined();
 
         await act(async () => {
@@ -258,7 +258,7 @@ describe("ReviewPage mastery action", () => {
         expect(container.textContent).not.toContain("确认设为已掌握？");
         expect(mocks.apiClient.patch).not.toHaveBeenCalled();
 
-        const retryButton = getButtonByText(container, "设为已掌握");
+        const retryButton = getButtonByText(container, "标记为已掌握");
         expect(retryButton).toBeDefined();
         expect(retryButton?.disabled).toBe(false);
     });
@@ -280,7 +280,7 @@ describe("ReviewPage mastery action", () => {
         });
         await flush();
 
-        const openDialogButton = getButtonByText(container, "设为已掌握");
+        const openDialogButton = getButtonByText(container, "标记为已掌握");
         expect(openDialogButton).toBeDefined();
 
         await act(async () => {
@@ -299,7 +299,7 @@ describe("ReviewPage mastery action", () => {
         expect(container.textContent).toContain("设置已掌握失败，请稍后重试。");
         expect(getButtonByText(container, "已掌握")).toBeUndefined();
 
-        const retryButton = getButtonByText(container, "设为已掌握");
+        const retryButton = getButtonByText(container, "标记为已掌握");
         expect(retryButton).toBeDefined();
         expect(retryButton?.disabled).toBe(false);
     });
