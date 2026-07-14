@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Search, Filter, CheckCircle, Clock, ChevronDown, Printer, ListChecks, T
 import Link from "next/link";
 import { format } from "date-fns";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -28,6 +28,11 @@ import { getMistakeStatusLabel } from "@/lib/mistake-status";
 import { QUESTION_TYPE_LABELS } from "@/lib/question-type";
 import { VALID_QUESTION_TYPES } from "@/lib/question-type";
 import type { QuestionType } from "@/lib/question-type";
+import {
+    buildErrorItemDetailHref,
+    buildErrorListUrlSearchParams,
+    parseErrorListUrlState,
+} from "@/lib/error-list-url-state";
 
 interface ErrorListProps {
     subjectId?: string;
@@ -41,19 +46,23 @@ type KnowledgeFilterChange = {
 };
 
 export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const initialUrlState = parseErrorListUrlState(searchParams);
     const [items, setItems] = useState<ErrorItem[]>([]);
     const [, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
-    const [masteryFilter, setMasteryFilter] = useState<"all" | "mastered" | "unmastered">("all");
-    const [timeFilter, setTimeFilter] = useState<"all" | "week" | "month">("all");
-    const [gradeFilter, setGradeFilter] = useState("");
-    const [chapterFilter, setChapterFilter] = useState("");
-    const [paperLevelFilter, setPaperLevelFilter] = useState<"all" | "a" | "b" | "other">("all");
-    const [questionTypeFilter, setQuestionTypeFilter] = useState<string>("all");
-    const [selectedTag, setSelectedTag] = useState<string | null>(null);
+    const [search, setSearch] = useState(initialUrlState.search);
+    const [masteryFilter, setMasteryFilter] = useState<"all" | "mastered" | "unmastered">(initialUrlState.masteryFilter);
+    const [timeFilter, setTimeFilter] = useState<"all" | "week" | "month">(initialUrlState.timeFilter);
+    const [gradeFilter, setGradeFilter] = useState(initialUrlState.gradeFilter);
+    const [chapterFilter, setChapterFilter] = useState(initialUrlState.chapterFilter);
+    const [paperLevelFilter, setPaperLevelFilter] = useState<"all" | "a" | "b" | "other">(initialUrlState.paperLevelFilter);
+    const [questionTypeFilter, setQuestionTypeFilter] = useState<string>(initialUrlState.questionTypeFilter);
+    const [selectedTag, setSelectedTag] = useState<string | null>(initialUrlState.selectedTag);
     const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
     // 分页状态
-    const [page, setPage] = useState(1);
+    const [page, setPage] = useState(initialUrlState.page);
     const [pageSize] = useState(DEFAULT_PAGE_SIZE);
     const [total, setTotal] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
@@ -62,7 +71,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isDeleting, setIsDeleting] = useState(false);
     const { t, language } = useLanguage();
-    const router = useRouter();
+    const isApplyingUrlStateRef = useRef(true);
 
     const handleExportPrint = () => {
         const params = new URLSearchParams();
@@ -87,6 +96,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
 
     const handleTagClick = (tag: string) => {
         setSelectedTag(selectedTag === tag ? null : tag);
+        setPage(1);
     };
 
     const handleFilterChange = ({ gradeSemester, chapter, tag }: KnowledgeFilterChange) => {
@@ -171,6 +181,32 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
         }
     };
 
+    useEffect(() => {
+        const nextState = parseErrorListUrlState(searchParams);
+        isApplyingUrlStateRef.current = true;
+        setSearch(nextState.search);
+        setMasteryFilter(nextState.masteryFilter);
+        setTimeFilter(nextState.timeFilter);
+        setGradeFilter(nextState.gradeFilter);
+        setChapterFilter(nextState.chapterFilter);
+        setPaperLevelFilter(nextState.paperLevelFilter);
+        setQuestionTypeFilter(nextState.questionTypeFilter);
+        setSelectedTag(nextState.selectedTag);
+        setPage(nextState.page);
+    }, [searchParams]);
+
+    const currentUrlState = useMemo(() => ({
+        search,
+        masteryFilter,
+        timeFilter,
+        gradeFilter,
+        chapterFilter,
+        paperLevelFilter,
+        questionTypeFilter,
+        selectedTag,
+        page,
+    }), [search, masteryFilter, timeFilter, gradeFilter, chapterFilter, paperLevelFilter, questionTypeFilter, selectedTag, page]);
+
     // 追踪筛选条件是否变化（用于判断是否需要重置页码）
     const prevFiltersRef = useRef({ search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter, questionTypeFilter });
 
@@ -190,15 +226,39 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
         // 更新 ref
         prevFiltersRef.current = { search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter, questionTypeFilter };
 
-        if (filtersChanged && page !== 1) {
+        if (!isApplyingUrlStateRef.current && filtersChanged && page !== 1) {
             // 筛选条件变化且不在第一页，重置到第一页（会再次触发此 effect）
             setPage(1);
             return;
         }
 
+        const nextQueryString = buildErrorListUrlSearchParams(currentUrlState).toString();
+        const currentQueryString = searchParams.toString();
+
+        if (nextQueryString !== currentQueryString) {
+            router.replace(nextQueryString ? `${pathname}?${nextQueryString}` : pathname, { scroll: false });
+        }
+
+        isApplyingUrlStateRef.current = false;
+
         // 正常请求数据
         fetchItems();
-    }, [page, search, masteryFilter, timeFilter, selectedTag, subjectId, gradeFilter, chapterFilter, paperLevelFilter, questionTypeFilter]);
+    }, [
+        page,
+        search,
+        masteryFilter,
+        timeFilter,
+        selectedTag,
+        subjectId,
+        gradeFilter,
+        chapterFilter,
+        paperLevelFilter,
+        questionTypeFilter,
+        currentUrlState,
+        searchParams,
+        router,
+        pathname,
+    ]);
 
     const fetchItems = async () => {
         setLoading(true);
@@ -207,7 +267,7 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
             if (subjectId) params.append("subjectId", subjectId);
             if (search) params.append("query", search);
             if (masteryFilter !== "all") {
-                params.append("mastery", masteryFilter === "mastered" ? "1" : "0");
+                params.append("mastery", masteryFilter === "mastered" ? "2" : "0");
             }
             if (timeFilter !== "all") {
                 params.append("timeRange", timeFilter);
@@ -395,7 +455,10 @@ export function ErrorList({ subjectId, subjectName }: ErrorListProps = {}) {
                                     />
                                 </div>
                             )}
-                            <Link href={isSelectMode ? "#" : `/error-items/${item.id}`} onClick={(e) => isSelectMode && e.preventDefault()}>
+                            <Link
+                                href={isSelectMode ? "#" : buildErrorItemDetailHref(item.id, pathname, currentUrlState)}
+                                onClick={(e) => isSelectMode && e.preventDefault()}
+                            >
                                 <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer gap-2 pt-4">
                                     <CardHeader className="pb-0">
                                         <div className="flex justify-between items-start">

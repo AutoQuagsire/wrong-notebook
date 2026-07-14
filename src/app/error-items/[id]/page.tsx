@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import { NotebookSelector } from "@/components/notebook-selector";
 import { GeogebraDemo } from "@/components/geogebra-demo";
 import { QUESTION_TYPE_LABELS, VALID_QUESTION_TYPES } from "@/lib/question-type";
 import type { QuestionType } from "@/lib/question-type";
+import { getSafeErrorItemReturnTo } from "@/lib/error-list-url-state";
 
 function getErrorMessage(error: unknown): string {
     if (error && typeof error === "object") {
@@ -68,6 +69,7 @@ interface ErrorItemDetail {
 export default function ErrorDetailPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { t, language } = useLanguage();
     const [item, setItem] = useState<ErrorItemDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -421,6 +423,8 @@ export default function ErrorDetailPage() {
     if (loading) return <div className="p-8 text-center">{t.common.loading}</div>;
     if (!item) return <div className="p-8 text-center">{t.detail.notFound || "Item not found"}</div>;
 
+    const backHref = getSafeErrorItemReturnTo(searchParams.get("returnTo"), item.subjectId);
+
     // 优先从 tags 关联获取，回退到 knowledgePoints
     let tags: string[] = [];
     if (item.tags && item.tags.length > 0) {
@@ -439,7 +443,7 @@ export default function ErrorDetailPage() {
             <div className="container mx-auto p-4 space-y-6 pb-20">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex items-center gap-4">
-                        <Link href={item.subjectId ? `/notebooks/${item.subjectId}` : "/notebooks"}>
+                        <Link href={backHref}>
                             <Button variant="ghost" size="icon">
                                 <ArrowLeft className="w-4 h-4" />
                             </Button>
