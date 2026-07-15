@@ -848,6 +848,29 @@ describe('/api/practice', () => {
             expect(mocks.mockPrismaErrorItem.findUnique).not.toHaveBeenCalled();
         });
 
+        it('客户端不应通过公开 POST 入口伪造 MARK_MASTERED 记录', async () => {
+            const request = new Request('http://localhost/api/practice/record', {
+                method: 'POST',
+                body: JSON.stringify({
+                    errorItemId: 'error-item-1',
+                    practiceType: 'MARK_MASTERED',
+                }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await RECORD_POST(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('MARK_MASTERED can only be created internally');
+            expect(mocks.mockPrismaPracticeRecord.create).not.toHaveBeenCalled();
+            expect(mocks.mockPrismaErrorItem.updateMany).not.toHaveBeenCalled();
+            expect(mocks.mockProcessFsrsReview).not.toHaveBeenCalled();
+            expect(mocks.mockFsrsCard.create).not.toHaveBeenCalled();
+            expect(mocks.mockFsrsCard.update).not.toHaveBeenCalled();
+            expect(mocks.mockFsrsCard.delete).not.toHaveBeenCalled();
+        });
+
         it('应该保存额外的可选字段 (rating, durationSeconds, usedHint, independent)', async () => {
             mocks.mockPrismaErrorItem.findUnique.mockResolvedValue(mockOwnedErrorItem);
             mocks.mockPrismaPracticeRecord.create.mockImplementation(async (args: PrismaMockArgs) => ({

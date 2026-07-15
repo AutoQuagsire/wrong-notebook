@@ -212,6 +212,10 @@ export async function POST(req: Request) {
         const normalizedRating = validateRating(rating);
         const normalizedDurationSeconds = validateDurationSeconds(durationSeconds);
 
+        if (normalizedPracticeType === "MARK_MASTERED") {
+            return badRequest("MARK_MASTERED can only be created internally");
+        }
+
         const answerImageError = validateAnswerImageUrl(normalizedAnswerImageUrl);
         if (answerImageError) {
             return badRequest(answerImageError);
