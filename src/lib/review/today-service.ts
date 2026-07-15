@@ -1,5 +1,8 @@
+import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { ReviewTodayItem, ReviewTodayResponse, UpcomingReviewDay } from "@/types/api";
+
+type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
 /** Map an errorItem.id (and whether it has an image) to lightweight image info. */
 function buildImageInfo(errorItemId: string, originalImageUrl?: string | null): {
@@ -112,6 +115,28 @@ interface QueryResult {
     dueItems: ReviewTodayItem[];
     newItems: ReviewTodayItem[];
     stats: ReviewTodayResponse["stats"];
+}
+
+export async function isErrorItemInTodayReviewQueue(
+    userId: string,
+    errorItemId: string,
+    tx: Pick<PrismaTx, "fsrsCard"> = prisma,
+): Promise<boolean> {
+    const now = new Date();
+
+    const card = await tx.fsrsCard.findFirst({
+        where: {
+            userId,
+            errorItemId,
+            due: { lte: now },
+            errorItem: {
+                masteryLevel: { not: 2 },
+            },
+        },
+        select: { id: true },
+    });
+
+    return Boolean(card);
 }
 
 export async function getTodayReviewList(

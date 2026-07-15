@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Clock3, ChevronDown, Eye, History, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,7 +90,9 @@ function formatReviewDate(value?: string | null): string {
 export default function ReviewPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const errorItemId = typeof params.errorItemId === "string" ? params.errorItemId : "";
+    const reviewSource = searchParams.get("from");
     const startTimeRef = useRef(Date.now());
 
     const [showOriginalImage, setShowOriginalImage] = useState(false);
@@ -287,7 +289,10 @@ export default function ReviewPage() {
         try {
             const updated = await apiClient.patch<{ id: string; masteryLevel: number }>(
                 `/api/error-items/${item.id}/mastery`,
-                { masteryLevel: 2 },
+                {
+                    masteryLevel: 2,
+                    ...(reviewSource === "today" ? { source: "TODAY_REVIEW" } : {}),
+                },
             );
 
             setItem(prev => prev ? { ...prev, masteryLevel: updated.masteryLevel } : prev);

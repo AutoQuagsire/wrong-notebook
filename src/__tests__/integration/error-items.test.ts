@@ -16,8 +16,16 @@ const mocks = vi.hoisted(() => ({
         findFirst: vi.fn(), // 用于去重检查
         findMany: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
         delete: vi.fn(),
         count: vi.fn(),
+    },
+    mockPrismaPracticeRecord: {
+        create: vi.fn(),
+    },
+    mockPrismaFsrsCard: {
+        findFirst: vi.fn(),
     },
     mockPrismaKnowledgeTag: {
         findFirst: vi.fn(),
@@ -40,8 +48,15 @@ vi.mock('@/lib/prisma', () => ({
     prisma: {
         user: mocks.mockPrismaUser,
         errorItem: mocks.mockPrismaErrorItem,
+        practiceRecord: mocks.mockPrismaPracticeRecord,
+        fsrsCard: mocks.mockPrismaFsrsCard,
         knowledgeTag: mocks.mockPrismaKnowledgeTag,
         subject: mocks.mockPrismaSubject,
+        $transaction: vi.fn(async (callback) => callback({
+            errorItem: mocks.mockPrismaErrorItem,
+            practiceRecord: mocks.mockPrismaPracticeRecord,
+            fsrsCard: mocks.mockPrismaFsrsCard,
+        })),
     },
 }));
 
@@ -103,6 +118,18 @@ describe('/api/error-items', () => {
 
         // Default: errorItem.findFirst returns null (no duplicate found)
         mocks.mockPrismaErrorItem.findFirst.mockResolvedValue(null);
+        mocks.mockPrismaErrorItem.updateMany.mockResolvedValue({ count: 1 });
+        mocks.mockPrismaErrorItem.findUniqueOrThrow.mockImplementation(async () => ({
+            id: 'error-item-1',
+            masteryLevel: 2,
+        }));
+        mocks.mockPrismaPracticeRecord.create.mockResolvedValue({
+            id: 'practice-record-1',
+            practiceType: 'MARK_MASTERED',
+            errorItemId: 'error-item-1',
+            userId: 'user-123',
+        });
+        mocks.mockPrismaFsrsCard.findFirst.mockResolvedValue(null);
     });
 
     describe('POST /api/error-items (创建错题)', () => {
@@ -809,13 +836,12 @@ describe('/api/error-items', () => {
 
     describe('PATCH /api/error-items/[id]/mastery (更新掌握程度)', () => {
         it('应该成功更新掌握程度为已掌握', async () => {
-            // Mock ownership check (findUnique)
             mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
                 masteryLevel: 0,
             });
-            mocks.mockPrismaErrorItem.update.mockResolvedValue({
+            mocks.mockPrismaErrorItem.findUniqueOrThrow.mockResolvedValue({
                 id: 'error-item-1',
                 masteryLevel: 2,
             });
@@ -831,16 +857,16 @@ describe('/api/error-items', () => {
 
             expect(response.status).toBe(200);
             expect(data.masteryLevel).toBe(2);
+            expect(mocks.mockPrismaPracticeRecord.create).not.toHaveBeenCalled();
         });
 
         it('应该成功更新掌握程度为未掌握', async () => {
-            // Mock ownership check (findUnique)
             mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
                 masteryLevel: 2,
             });
-            mocks.mockPrismaErrorItem.update.mockResolvedValue({
+            mocks.mockPrismaErrorItem.findUniqueOrThrow.mockResolvedValue({
                 id: 'error-item-1',
                 masteryLevel: 0,
             });
@@ -856,19 +882,19 @@ describe('/api/error-items', () => {
 
             expect(response.status).toBe(200);
             expect(data.masteryLevel).toBe(0);
+            expect(mocks.mockPrismaPracticeRecord.create).not.toHaveBeenCalled();
         });
 
         it('应该支持不同级别的掌握程度', async () => {
             const levels = [0, 1, 2];
 
             for (const level of levels) {
-                // Mock ownership check (findUnique)
                 mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
                     id: 'error-item-1',
                     userId: 'user-123',
                     masteryLevel: level === 2 ? 0 : 2,
                 });
-                mocks.mockPrismaErrorItem.update.mockResolvedValue({
+                mocks.mockPrismaErrorItem.findUniqueOrThrow.mockResolvedValue({
                     id: 'error-item-1',
                     masteryLevel: level,
                 });
@@ -896,7 +922,7 @@ describe('/api/error-items', () => {
 
             expect(response.status).toBe(400);
             expect(data.message).toBe('masteryLevel must be 0, 1, or 2');
-            expect(mocks.mockPrismaErrorItem.update).not.toHaveBeenCalled();
+            expect(mocks.mockPrismaErrorItem.updateMany).not.toHaveBeenCalled();
         });
 
         it('应该拒绝未登录用户', async () => {
@@ -933,7 +959,7 @@ describe('/api/error-items', () => {
 
             expect(response.status).toBe(403);
             expect(data.message).toBe('Not authorized to update this item');
-            expect(mocks.mockPrismaErrorItem.update).not.toHaveBeenCalled();
+            expect(mocks.mockPrismaErrorItem.updateMany).not.toHaveBeenCalled();
         });
 
         it('应该在错题不存在时返回 404', async () => {
@@ -950,7 +976,7 @@ describe('/api/error-items', () => {
 
             expect(response.status).toBe(404);
             expect(data.message).toBe('Item not found');
-            expect(mocks.mockPrismaErrorItem.update).not.toHaveBeenCalled();
+            expect(mocks.mockPrismaErrorItem.updateMany).not.toHaveBeenCalled();
         });
 
         it('重复设为已掌握时应幂等返回成功且不重复更新', async () => {
@@ -974,17 +1000,17 @@ describe('/api/error-items', () => {
                 id: 'error-item-1',
                 masteryLevel: 2,
             });
-            expect(mocks.mockPrismaErrorItem.update).not.toHaveBeenCalled();
+            expect(mocks.mockPrismaErrorItem.updateMany).not.toHaveBeenCalled();
+            expect(mocks.mockPrismaPracticeRecord.create).not.toHaveBeenCalled();
         });
 
         it('应该处理数据库错误', async () => {
-            // Mock ownership check succeeds, but update fails
             mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
                 id: 'error-item-1',
                 userId: 'user-123',
                 masteryLevel: 0,
             });
-            mocks.mockPrismaErrorItem.update.mockRejectedValue(new Error('Database error'));
+            mocks.mockPrismaErrorItem.updateMany.mockRejectedValue(new Error('Database error'));
 
             const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
                 method: 'PATCH',
@@ -997,6 +1023,174 @@ describe('/api/error-items', () => {
 
             expect(response.status).toBe(500);
             expect(data.message).toBe('Failed to update error item');
+        });
+
+        it('今日复习页标记已掌握时应创建一条 MARK_MASTERED 记录且不更新 FsrsCard', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+                masteryLevel: 1,
+            });
+            mocks.mockPrismaFsrsCard.findFirst.mockResolvedValue({ id: 'card-1' });
+            mocks.mockPrismaErrorItem.findUniqueOrThrow.mockResolvedValue({
+                id: 'error-item-1',
+                masteryLevel: 2,
+            });
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
+                method: 'PATCH',
+                body: JSON.stringify({ masteryLevel: 2, source: 'TODAY_REVIEW' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.masteryLevel).toBe(2);
+            expect(mocks.mockPrismaPracticeRecord.create).toHaveBeenCalledTimes(1);
+            expect(mocks.mockPrismaPracticeRecord.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    userId: 'user-123',
+                    errorItemId: 'error-item-1',
+                    practiceType: 'MARK_MASTERED',
+                    rating: null,
+                    isCorrect: null,
+                }),
+            });
+            expect(mocks.mockPrismaFsrsCard.findFirst).toHaveBeenCalledTimes(1);
+        });
+
+        it('逾期题在今日复习页标记已掌握时也应计入完成数', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+                masteryLevel: 0,
+            });
+            mocks.mockPrismaFsrsCard.findFirst.mockResolvedValue({ id: 'overdue-card-1' });
+            mocks.mockPrismaErrorItem.findUniqueOrThrow.mockResolvedValue({
+                id: 'error-item-1',
+                masteryLevel: 2,
+            });
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
+                method: 'PATCH',
+                body: JSON.stringify({ masteryLevel: 2, source: 'TODAY_REVIEW' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+
+            expect(response.status).toBe(200);
+            expect(mocks.mockPrismaPracticeRecord.create).toHaveBeenCalledTimes(1);
+        });
+
+        it('重复请求今日复习标记已掌握时不应重复创建 MARK_MASTERED 记录', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+                masteryLevel: 2,
+            });
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
+                method: 'PATCH',
+                body: JSON.stringify({ masteryLevel: 2, source: 'TODAY_REVIEW' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+
+            expect(response.status).toBe(200);
+            expect(mocks.mockPrismaPracticeRecord.create).not.toHaveBeenCalled();
+            expect(mocks.mockPrismaErrorItem.updateMany).not.toHaveBeenCalled();
+        });
+
+        it('并发下若掌握状态已被其他请求更新，不应重复创建 MARK_MASTERED 记录', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+                masteryLevel: 0,
+            });
+            mocks.mockPrismaFsrsCard.findFirst.mockResolvedValue({ id: 'card-1' });
+            mocks.mockPrismaErrorItem.updateMany.mockResolvedValueOnce({ count: 0 });
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
+                method: 'PATCH',
+                body: JSON.stringify({ masteryLevel: 2, source: 'TODAY_REVIEW' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data).toEqual({
+                id: 'error-item-1',
+                masteryLevel: 2,
+            });
+            expect(mocks.mockPrismaPracticeRecord.create).not.toHaveBeenCalled();
+        });
+
+        it('普通错题详情页设置已掌握时不应创建 MARK_MASTERED 记录', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+                masteryLevel: 0,
+            });
+            mocks.mockPrismaErrorItem.findUniqueOrThrow.mockResolvedValue({
+                id: 'error-item-1',
+                masteryLevel: 2,
+            });
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
+                method: 'PATCH',
+                body: JSON.stringify({ masteryLevel: 2 }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+
+            expect(response.status).toBe(200);
+            expect(mocks.mockPrismaPracticeRecord.create).not.toHaveBeenCalled();
+            expect(mocks.mockPrismaFsrsCard.findFirst).not.toHaveBeenCalled();
+        });
+
+        it('不属于今日计划的题即使从今日复习来源提交也不应增加完成数', async () => {
+            mocks.mockPrismaErrorItem.findUnique.mockResolvedValue({
+                id: 'error-item-1',
+                userId: 'user-123',
+                masteryLevel: 0,
+            });
+            mocks.mockPrismaFsrsCard.findFirst.mockResolvedValue(null);
+            mocks.mockPrismaErrorItem.findUniqueOrThrow.mockResolvedValue({
+                id: 'error-item-1',
+                masteryLevel: 2,
+            });
+
+            const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
+                method: 'PATCH',
+                body: JSON.stringify({ masteryLevel: 2, source: 'TODAY_REVIEW' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+
+            expect(response.status).toBe(200);
+            expect(mocks.mockPrismaPracticeRecord.create).not.toHaveBeenCalled();
+        });
+
+        it('应拒绝非法来源参数', async () => {
+            const request = new Request('http://localhost/api/error-items/error-item-1/mastery', {
+                method: 'PATCH',
+                body: JSON.stringify({ masteryLevel: 2, source: 'DETAIL_PAGE' }),
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            const response = await PATCH_MASTERY(request, { params: Promise.resolve({ id: 'error-item-1' }) });
+            const data = await response.json();
+
+            expect(response.status).toBe(400);
+            expect(data.message).toBe('Invalid source');
         });
     });
 

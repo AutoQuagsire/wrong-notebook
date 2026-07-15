@@ -166,6 +166,34 @@ describe('/api/stats', () => {
             expect(data.overallStats.rate).toBe('0.0');
         });
 
+        it('todayPracticeCount 应计入 MARK_MASTERED 记录', async () => {
+            mocks.mockPrismaPracticeRecord.groupBy.mockResolvedValue([]);
+            mocks.mockPrismaPracticeRecord.findMany.mockResolvedValue([
+                { createdAt: new Date(), isCorrect: null, difficulty: null, practiceType: 'MARK_MASTERED' },
+            ]);
+            mocks.mockPrismaPracticeRecord.count
+                .mockResolvedValueOnce(1)
+                .mockResolvedValueOnce(1)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0)
+                .mockResolvedValueOnce(0);
+
+            const request = new Request('http://localhost/api/stats/practice');
+            const response = await GET_PRACTICE_STATS(request);
+            const data = await response.json();
+
+            expect(response.status).toBe(200);
+            expect(data.practiceOverview.todayPracticeCount).toBe(1);
+            expect(data.overallStats.total).toBe(0);
+            expect(data.overallStats.correct).toBe(0);
+        });
+
         it('应该拒绝未登录用户', async () => {
             vi.mocked(getServerSession).mockResolvedValue(null);
 

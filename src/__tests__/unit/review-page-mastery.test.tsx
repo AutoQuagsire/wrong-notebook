@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => {
             back: vi.fn(),
         },
         useParams: vi.fn(() => ({ errorItemId: "err-1" })),
+        useSearchParams: vi.fn(() => ({
+            get: (key: string) => (key === "from" ? "today" : null),
+        })),
         ApiError: MockApiError,
     };
 });
@@ -34,6 +37,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("next/navigation", () => ({
     useParams: mocks.useParams,
     useRouter: () => mocks.router,
+    useSearchParams: mocks.useSearchParams,
 }));
 
 vi.mock("next/link", () => ({
@@ -202,7 +206,10 @@ describe("ReviewPage mastery action", () => {
         });
 
         expect(mocks.apiClient.patch).toHaveBeenCalledTimes(1);
-        expect(mocks.apiClient.patch).toHaveBeenCalledWith("/api/error-items/err-1/mastery", { masteryLevel: 2 });
+        expect(mocks.apiClient.patch).toHaveBeenCalledWith("/api/error-items/err-1/mastery", {
+            masteryLevel: 2,
+            source: "TODAY_REVIEW",
+        });
         expect(container.textContent).toContain("正在设置…");
         expect(getButtonByText(container, "正在设置…")?.disabled).toBe(true);
 
@@ -295,7 +302,10 @@ describe("ReviewPage mastery action", () => {
         });
         await flush();
 
-        expect(mocks.apiClient.patch).toHaveBeenCalledWith("/api/error-items/err-1/mastery", { masteryLevel: 2 });
+        expect(mocks.apiClient.patch).toHaveBeenCalledWith("/api/error-items/err-1/mastery", {
+            masteryLevel: 2,
+            source: "TODAY_REVIEW",
+        });
         expect(container.textContent).toContain("设置已掌握失败，请稍后重试。");
         expect(getButtonByText(container, "已掌握")).toBeUndefined();
 

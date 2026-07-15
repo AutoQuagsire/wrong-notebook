@@ -122,7 +122,7 @@ function mapRatingToCorrectness(rating: number): boolean {
     return rating >= 3;
 }
 
-const VALID_PRACTICE_TYPES = new Set(["SIMILAR_QUESTION", "ORIGINAL_REVIEW"]);
+const VALID_PRACTICE_TYPES = new Set(["SIMILAR_QUESTION", "ORIGINAL_REVIEW", "MARK_MASTERED"]);
 
 export async function GET(req: Request) {
     const session = await getServerSession(authOptions);

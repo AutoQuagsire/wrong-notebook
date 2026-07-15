@@ -4,8 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { getServerSession } from "next-auth";
 import { unauthorized, forbidden, notFound, internalError } from "@/lib/api-errors";
 import { createLogger } from "@/lib/logger";
+import { isErrorItemInTodayReviewQueue } from "@/lib/review/today-service";
 
 const logger = createLogger('api:error-items:mastery');
+const TODAY_REVIEW_SOURCE = "TODAY_REVIEW";
 
 export async function PATCH(
     req: Request,
@@ -26,11 +28,18 @@ export async function PATCH(
             return unauthorized("Authentication required");
         }
 
-        const { masteryLevel } = await req.json();
+        const { masteryLevel, source } = await req.json();
 
         if (typeof masteryLevel !== "number" || ![0, 1, 2].includes(masteryLevel)) {
             return NextResponse.json(
                 { message: "masteryLevel must be 0, 1, or 2" },
+                { status: 400 },
+            );
+        }
+
+        if (source !== undefined && source !== TODAY_REVIEW_SOURCE) {
+            return NextResponse.json(
+                { message: "Invalid source" },
                 { status: 400 },
             );
         }
@@ -60,17 +69,60 @@ export async function PATCH(
             });
         }
 
-        const errorItem = await prisma.errorItem.update({
-            where: {
-                id,
-            },
-            data: {
-                masteryLevel,
-            },
-            select: {
-                id: true,
-                masteryLevel: true,
-            },
+        const errorItem = await prisma.$transaction(async (tx) => {
+            const shouldCountAsCompleted =
+                source === TODAY_REVIEW_SOURCE &&
+                masteryLevel === 2 &&
+                existingItem.masteryLevel !== 2 &&
+                await isErrorItemInTodayReviewQueue(user.id, id, tx);
+
+            const updated = await tx.errorItem.updateMany({
+                where: {
+                    id,
+                    userId: user.id,
+                    masteryLevel: { not: masteryLevel },
+                },
+                data: {
+                    masteryLevel,
+                },
+            });
+
+            if (updated.count === 0) {
+                return tx.errorItem.findUniqueOrThrow({
+                    where: { id },
+                    select: {
+                        id: true,
+                        masteryLevel: true,
+                    },
+                });
+            }
+
+            if (shouldCountAsCompleted) {
+                await tx.practiceRecord.create({
+                    data: {
+                        userId: user.id,
+                        subject: null,
+                        difficulty: null,
+                        isCorrect: null,
+                        errorItemId: id,
+                        practiceType: "MARK_MASTERED",
+                        rating: null,
+                        durationSeconds: null,
+                        usedHint: null,
+                        independent: null,
+                        answerText: null,
+                        answerImageUrl: null,
+                    },
+                });
+            }
+
+            return tx.errorItem.findUniqueOrThrow({
+                where: { id },
+                select: {
+                    id: true,
+                    masteryLevel: true,
+                },
+            });
         });
 
         return NextResponse.json(errorItem);
