@@ -103,7 +103,8 @@ test("knowledge list keeps subject filter and return state", async ({ page }) =>
         await subjectCombobox.click();
         await page.getByRole("option", { name: "全部科目" }).click();
         await expect(page).toHaveURL(new RegExp(`/knowledge\\?query=${unique}$`));
-        await expect(page.getByText(`${unique} 二重积分 线代题`)).toBeVisible();
+        await expect(page.getByText("第 1 页 / 共 2 页")).toBeVisible();
+        await expect(page.getByText(`${unique} 二重积分 第1题`)).toBeVisible();
     } finally {
         for (const itemId of createdItemIds.reverse()) {
             await page.request.delete(`/api/knowledge-items/${itemId}`);
