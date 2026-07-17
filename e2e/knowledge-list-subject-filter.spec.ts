@@ -66,7 +66,7 @@ test("knowledge list keeps subject filter and return state", async ({ page }) =>
         await page.getByRole("option", { name: subjectAName }).click();
 
         await expect(page).toHaveURL(new RegExp(`/knowledge\\?query=${unique}&subjectId=${subjectAId}`));
-        await expect(page.getByText(subjectAName)).toBeVisible();
+        await expect(subjectCombobox).toContainText(subjectAName);
         await expect(page.getByText(`${unique} 二重积分 第21题`)).not.toBeVisible();
 
         await page.getByRole("button", { name: "下一页" }).click();
