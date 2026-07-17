@@ -92,8 +92,15 @@ test("knowledge list keeps subject filter and return state", async ({ page }) =>
 
         await page.goto(`/knowledge?query=${unique}&subjectId=bad-subject&page=2`);
         await expect(page).toHaveURL(new RegExp(`/knowledge\\?query=${unique}&page=2$`));
+        await expect(subjectCombobox).toContainText("全部科目");
 
-        await page.getByRole("combobox", { name: "科目筛选" }).click();
+        await subjectCombobox.click();
+        await page.getByRole("option", { name: subjectBName }).click();
+        await expect(page).toHaveURL(new RegExp(`/knowledge\\?query=${unique}&subjectId=${subjectBId}$`));
+        await expect(subjectCombobox).toContainText(subjectBName);
+        await expect(page.getByText(`${unique} 二重积分 线代题`)).toBeVisible();
+
+        await subjectCombobox.click();
         await page.getByRole("option", { name: "全部科目" }).click();
         await expect(page).toHaveURL(new RegExp(`/knowledge\\?query=${unique}$`));
         await expect(page.getByText(`${unique} 二重积分 线代题`)).toBeVisible();
