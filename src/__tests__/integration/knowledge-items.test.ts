@@ -87,7 +87,7 @@ describe("/api/knowledge-items", () => {
 
         it("creates successfully without answer", async () => {
             mocks.mockPrismaSubject.findFirst.mockResolvedValue({ id: "s1" });
-            mocks.mockPrismaKnowledgeItem.aggregate.mockResolvedValue({ _max: { order: 5 } } as any);
+            mocks.mockPrismaKnowledgeItem.aggregate.mockResolvedValue({ _max: { order: 5 } } as { _max: { order: number } });
             mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]);
             mocks.mockPrismaKnowledgeItem.create.mockResolvedValue({
                 id: "ki-1", userId: "user-123", subjectId: "s1", prompt: "p", answer: "",
@@ -120,6 +120,83 @@ describe("/api/knowledge-items", () => {
             const data = await res.json();
             expect(data.items).toBeDefined();
             expect(data.total).toBe(0);
+        });
+
+        it("filters by subjectId only", async () => {
+            mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]);
+            mocks.mockPrismaKnowledgeItem.count.mockResolvedValue(0);
+
+            const req = buildReq("GET", "/api/knowledge-items?subjectId=sub-1");
+            const res = await GET(req);
+
+            expect(res.status).toBe(200);
+            expect(mocks.mockPrismaKnowledgeItem.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        userId: "user-123",
+                        subjectId: "sub-1",
+                    },
+                }),
+            );
+            expect(mocks.mockPrismaKnowledgeItem.count).toHaveBeenCalledWith({
+                where: {
+                    userId: "user-123",
+                    subjectId: "sub-1",
+                },
+            });
+        });
+
+        it("combines subjectId and query filters", async () => {
+            mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]);
+            mocks.mockPrismaKnowledgeItem.count.mockResolvedValue(0);
+
+            const req = buildReq("GET", "/api/knowledge-items?subjectId=sub-1&query=%E4%BA%8C%E9%87%8D%E7%A7%AF%E5%88%86");
+            const res = await GET(req);
+
+            expect(res.status).toBe(200);
+            expect(mocks.mockPrismaKnowledgeItem.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        userId: "user-123",
+                        subjectId: "sub-1",
+                        OR: [
+                            { prompt: { contains: "二重积分" } },
+                            { answer: { contains: "二重积分" } },
+                            { detail: { contains: "二重积分" } },
+                        ],
+                    },
+                }),
+            );
+        });
+
+        it("returns empty results for a nonexistent subjectId", async () => {
+            mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]);
+            mocks.mockPrismaKnowledgeItem.count.mockResolvedValue(0);
+
+            const req = buildReq("GET", "/api/knowledge-items?subjectId=missing-subject");
+            const res = await GET(req);
+            const data = await res.json();
+
+            expect(res.status).toBe(200);
+            expect(data.items).toEqual([]);
+            expect(data.total).toBe(0);
+        });
+
+        it("always scopes list queries to the current user", async () => {
+            mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]);
+            mocks.mockPrismaKnowledgeItem.count.mockResolvedValue(0);
+
+            const req = buildReq("GET", "/api/knowledge-items?subjectId=other-user-subject");
+            const res = await GET(req);
+
+            expect(res.status).toBe(200);
+            expect(mocks.mockPrismaKnowledgeItem.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        userId: "user-123",
+                    }),
+                }),
+            );
         });
     });
 

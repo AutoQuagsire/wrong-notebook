@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
 import { ArrowLeft, Edit, Save, Trash2, Brain } from "lucide-react";
 import Link from "next/link";
+import { getSafeKnowledgeReturnTo } from "@/lib/knowledge-list-url-state";
 
 interface KnowledgeItemDetail {
     id: string;
@@ -35,9 +36,15 @@ interface KnowledgeItemDetail {
     updatedAt: string;
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+}
+
 export default function KnowledgeDetailPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const id = params.id as string;
     const [item, setItem] = useState<KnowledgeItemDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -51,18 +58,18 @@ export default function KnowledgeDetailPage() {
     const [editSource, setEditSource] = useState("");
     const [editOrder, setEditOrder] = useState("");
 
-    const fetchItem = async () => {
+    const fetchItem = useCallback(async () => {
         try {
             const data = await apiClient.get<KnowledgeItemDetail>(`/api/knowledge-items/${id}`);
             setItem(data);
-        } catch (err: any) {
+        } catch {
             setItem(null);
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
-    useEffect(() => { fetchItem(); }, [id]);
+    useEffect(() => { fetchItem(); }, [fetchItem]);
 
     const startEdit = () => {
         if (!item) return;
@@ -89,8 +96,8 @@ export default function KnowledgeDetailPage() {
             setItem(updated);
             setEditing(false);
             setEditError(null);
-        } catch (err: any) {
-            setEditError(err?.message || "保存失败");
+        } catch (error) {
+            setEditError(getErrorMessage(error, "保存失败"));
         }
     };
 
@@ -99,8 +106,8 @@ export default function KnowledgeDetailPage() {
         try {
             await apiClient.delete(`/api/knowledge-items/${id}`);
             router.push("/knowledge");
-        } catch (err: any) {
-            alert(err?.message || "删除失败");
+        } catch (error) {
+            alert(getErrorMessage(error, "删除失败"));
         }
     };
 
@@ -134,11 +141,13 @@ export default function KnowledgeDetailPage() {
     if (loading) return <div className="p-8 text-center text-muted-foreground">加载中...</div>;
     if (!item) return <div className="p-8 text-center text-muted-foreground">知识点不存在</div>;
 
+    const backHref = getSafeKnowledgeReturnTo(searchParams.get("returnTo"));
+
     return (
         <main className="min-h-screen p-4 md:p-8 bg-background">
             <div className="max-w-3xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
-                    <Link href="/knowledge" className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
+                    <Link href={backHref} className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
                         <ArrowLeft className="h-4 w-4" />返回列表
                     </Link>
                     <div className="flex gap-2">
