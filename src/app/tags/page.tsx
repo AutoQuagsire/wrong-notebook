@@ -215,7 +215,7 @@ export default function TagsPage() {
         }
 
         try {
-            await apiClient.delete(`/api/tags?id=${tagId}`);
+            await apiClient.post("/api/tags", { action: "delete", id: tagId });
             await fetchCustomTags();
             await fetchTags(subject);
         } catch (error) {

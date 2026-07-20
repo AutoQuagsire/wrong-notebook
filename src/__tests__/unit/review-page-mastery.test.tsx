@@ -181,7 +181,7 @@ describe("ReviewPage mastery action", () => {
             userNotes: "",
             subject: { id: "subj-1", name: "数学" },
         });
-        mocks.apiClient.patch.mockReturnValue(patchRequest.promise);
+        mocks.apiClient.post.mockReturnValue(patchRequest.promise);
 
         await act(async () => {
             root.render(<ReviewPage />);
@@ -205,8 +205,8 @@ describe("ReviewPage mastery action", () => {
             confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         });
 
-        expect(mocks.apiClient.patch).toHaveBeenCalledTimes(1);
-        expect(mocks.apiClient.patch).toHaveBeenCalledWith("/api/error-items/err-1/mastery", {
+        expect(mocks.apiClient.post).toHaveBeenCalledTimes(1);
+        expect(mocks.apiClient.post).toHaveBeenCalledWith("/api/error-items/err-1/mastery", {
             masteryLevel: 2,
             source: "TODAY_REVIEW",
         });
@@ -223,13 +223,13 @@ describe("ReviewPage mastery action", () => {
         expect(masteredButton).toBeDefined();
         expect(masteredButton?.disabled).toBe(true);
         expect(getButtonByText(container, "标记为已掌握")).toBeUndefined();
-        expect(mocks.apiClient.patch).toHaveBeenCalledTimes(1);
+        expect(mocks.apiClient.post).toHaveBeenCalledTimes(1);
 
         await act(async () => {
             masteredButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
         });
 
-        expect(mocks.apiClient.patch).toHaveBeenCalledTimes(1);
+        expect(mocks.apiClient.post).toHaveBeenCalledTimes(1);
     });
 
     it("取消设为已掌握时应关闭确认框且不发送请求", async () => {
@@ -263,7 +263,7 @@ describe("ReviewPage mastery action", () => {
         });
 
         expect(container.textContent).not.toContain("确认设为已掌握？");
-        expect(mocks.apiClient.patch).not.toHaveBeenCalled();
+        expect(mocks.apiClient.post).not.toHaveBeenCalled();
 
         const retryButton = getButtonByText(container, "标记为已掌握");
         expect(retryButton).toBeDefined();
@@ -278,7 +278,7 @@ describe("ReviewPage mastery action", () => {
             userNotes: "",
             subject: { id: "subj-1", name: "数学" },
         });
-        mocks.apiClient.patch.mockRejectedValue(
+        mocks.apiClient.post.mockRejectedValue(
             new mocks.ApiError(500, "Internal Server Error", { message: "设置已掌握失败，请稍后重试。" }),
         );
 
@@ -302,7 +302,7 @@ describe("ReviewPage mastery action", () => {
         });
         await flush();
 
-        expect(mocks.apiClient.patch).toHaveBeenCalledWith("/api/error-items/err-1/mastery", {
+        expect(mocks.apiClient.post).toHaveBeenCalledWith("/api/error-items/err-1/mastery", {
             masteryLevel: 2,
             source: "TODAY_REVIEW",
         });

@@ -8,6 +8,14 @@ import { createLogger } from "@/lib/logger";
 const logger = createLogger('api:error-items:clear');
 
 export async function DELETE(req: Request) {
+    return handleClearErrorItems(req);
+}
+
+export async function POST(req: Request) {
+    return handleClearErrorItems(req);
+}
+
+async function handleClearErrorItems(req: Request) {
     const session = await getServerSession(authOptions);
 
     if (!session || !session.user) {

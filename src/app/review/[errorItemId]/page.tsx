@@ -65,6 +65,10 @@ function getErrorMessage(error: unknown, fallback: string): string {
     }
 
     if (error instanceof Error && error.message) {
+        if (error.message === "Failed to fetch") {
+            return "当前网络未能完成请求，请重试或切换网络。";
+        }
+
         return error.message;
     }
 
@@ -287,7 +291,7 @@ export default function ReviewPage() {
         setMasteryError(null);
 
         try {
-            const updated = await apiClient.patch<{ id: string; masteryLevel: number }>(
+            const updated = await apiClient.post<{ id: string; masteryLevel: number }>(
                 `/api/error-items/${item.id}/mastery`,
                 {
                     masteryLevel: 2,
@@ -386,7 +390,7 @@ export default function ReviewPage() {
                         </div>
                     </div>
                 </div>
-                {masteryError ? (
+                {masteryError && !masteryDialogOpen ? (
                     <p className="text-sm text-red-600">{masteryError}</p>
                 ) : null}
 

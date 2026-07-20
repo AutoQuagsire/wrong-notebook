@@ -138,6 +138,10 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
+        if (body?.action === "delete") {
+            return handleDeleteTag(session.user.id, body.id);
+        }
+
         const { name, subject, parentId } = body;
 
         if (!name || !subject) {
@@ -193,31 +197,35 @@ export async function DELETE(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const tagId = searchParams.get('id');
 
-        if (!tagId) {
-            return NextResponse.json({ error: 'Tag ID is required' }, { status: 400 });
-        }
-
-        // 只能删除自己的自定义标签
-        const tag = await prisma.knowledgeTag.findFirst({
-            where: {
-                id: tagId,
-                userId: session.user.id,
-                isSystem: false,
-            },
-        });
-
-        if (!tag) {
-            return NextResponse.json({ error: 'Tag not found or not deletable' }, { status: 404 });
-        }
-
-        await prisma.knowledgeTag.delete({
-            where: { id: tagId },
-        });
-
-        return NextResponse.json({ success: true });
+        return handleDeleteTag(session.user.id, tagId);
 
     } catch (error) {
         logger.error({ error }, 'Error deleting tag');
         return NextResponse.json({ error: 'Failed to delete tag' }, { status: 500 });
     }
+}
+
+async function handleDeleteTag(userId: string, tagId: unknown) {
+    if (typeof tagId !== "string" || tagId.length === 0) {
+        return NextResponse.json({ error: 'Tag ID is required' }, { status: 400 });
+    }
+
+    // 只能删除自己的自定义标签
+    const tag = await prisma.knowledgeTag.findFirst({
+        where: {
+            id: tagId,
+            userId,
+            isSystem: false,
+        },
+    });
+
+    if (!tag) {
+        return NextResponse.json({ error: 'Tag not found or not deletable' }, { status: 404 });
+    }
+
+    await prisma.knowledgeTag.delete({
+        where: { id: tagId },
+    });
+
+    return NextResponse.json({ success: true });
 }

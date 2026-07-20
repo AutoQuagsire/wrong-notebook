@@ -233,7 +233,7 @@ export function SettingsDialog() {
                 payload.password = profile.password;
             }
 
-            await apiClient.patch("/api/user", payload);
+            await apiClient.post("/api/user", payload);
 
             alert(t.settings?.messages?.profileUpdated || "Profile updated");
             setProfile(prev => ({ ...prev, password: "" })); // Clear password field
@@ -258,7 +258,7 @@ export function SettingsDialog() {
 
         setClearingPractice(true);
         try {
-            await apiClient.delete("/api/stats/practice/clear");
+            await apiClient.post("/api/stats/practice/clear", {});
             alert(t.settings?.clearSuccess || "Success");
             setOpen(false);
             window.location.reload();
@@ -277,7 +277,7 @@ export function SettingsDialog() {
 
         setClearingError(true);
         try {
-            await apiClient.delete("/api/error-items/clear");
+            await apiClient.post("/api/error-items/clear", {});
             alert(t.settings?.clearSuccess || "Success");
             setOpen(false);
             window.location.reload();

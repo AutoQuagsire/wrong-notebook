@@ -11,6 +11,20 @@ export async function DELETE(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    return handleDeleteErrorItem(req, { params });
+}
+
+export async function POST(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    return handleDeleteErrorItem(req, { params });
+}
+
+async function handleDeleteErrorItem(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
     const { id } = await params;
     const session = await getServerSession(authOptions);
 

@@ -37,6 +37,14 @@ function getErrorMessage(error: unknown): string {
     return "未知错误";
 }
 
+function getNetworkAwareErrorMessage(error: unknown, fallback: string): string {
+    const message = getErrorMessage(error);
+    if (message === "Failed to fetch") {
+        return "当前网络未能完成请求，请重试或切换网络。";
+    }
+    return message || fallback;
+}
+
 interface KnowledgeTag {
     id: string;
     name: string;
@@ -156,12 +164,12 @@ export default function ErrorDetailPage() {
         const newLevel = item.masteryLevel === 2 ? 0 : 2;
 
         try {
-            await apiClient.patch(`/api/error-items/${item.id}/mastery`, { masteryLevel: newLevel });
+            await apiClient.post(`/api/error-items/${item.id}/mastery`, { masteryLevel: newLevel });
             setItem({ ...item, masteryLevel: newLevel });
             alert(newLevel > 0 ? (t.common?.messages?.markMastered || 'Marked as mastered') : (t.common?.messages?.unmarkMastered || 'Unmarked'));
         } catch (error) {
             console.error(error);
-            alert(t.common?.messages?.updateFailed || 'Update failed');
+            alert(getNetworkAwareErrorMessage(error, t.common?.messages?.updateFailed || 'Update failed'));
         }
     };
 
@@ -172,7 +180,7 @@ export default function ErrorDetailPage() {
         if (!confirm(confirmMessage)) return;
 
         try {
-            await apiClient.delete(`/api/error-items/${item.id}/delete`);
+            await apiClient.post(`/api/error-items/${item.id}/delete`, {});
             alert(t.common?.messages?.deleteSuccess || 'Deleted successfully');
             if (item.subjectId) {
                 router.push(`/notebooks/${item.subjectId}`);
@@ -181,7 +189,7 @@ export default function ErrorDetailPage() {
             }
         } catch (error) {
             console.error(error);
-            alert(t.common?.messages?.deleteFailed || 'Delete failed');
+            alert(getNetworkAwareErrorMessage(error, t.common?.messages?.deleteFailed || 'Delete failed'));
         }
     };
 

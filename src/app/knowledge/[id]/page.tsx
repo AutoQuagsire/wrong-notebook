@@ -104,7 +104,7 @@ export default function KnowledgeDetailPage() {
     const handleDelete = async () => {
         if (!item || !confirm("确定删除这个知识点？")) return;
         try {
-            await apiClient.delete(`/api/knowledge-items/${id}`);
+            await apiClient.post(`/api/knowledge-items/${id}`, {});
             router.push("/knowledge");
         } catch (error) {
             alert(getErrorMessage(error, "删除失败"));

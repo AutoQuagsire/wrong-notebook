@@ -140,6 +140,20 @@ export async function DELETE(
     req: Request,
     { params }: { params: Promise<{ id: string }> },
 ) {
+    return handleDeleteKnowledgeItem(req, { params });
+}
+
+export async function POST(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> },
+) {
+    return handleDeleteKnowledgeItem(req, { params });
+}
+
+async function handleDeleteKnowledgeItem(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> },
+) {
     const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) return unauthorized("Authentication required");

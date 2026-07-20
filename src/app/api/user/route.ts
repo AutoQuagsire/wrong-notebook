@@ -50,6 +50,14 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
+    return handleUpdateUser(req);
+}
+
+export async function POST(req: Request) {
+    return handleUpdateUser(req);
+}
+
+async function handleUpdateUser(req: Request) {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.email) {

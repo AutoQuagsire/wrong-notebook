@@ -13,6 +13,20 @@ export async function PATCH(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    return handleMasteryUpdate(req, { params });
+}
+
+export async function POST(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    return handleMasteryUpdate(req, { params });
+}
+
+async function handleMasteryUpdate(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
     const { id } = await params;
     const session = await getServerSession(authOptions);
 

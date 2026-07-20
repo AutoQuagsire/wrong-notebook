@@ -8,6 +8,14 @@ import { createLogger } from "@/lib/logger";
 const logger = createLogger('api:stats:practice:clear');
 
 export async function DELETE(req: Request) {
+    return handleClearPracticeStats(req);
+}
+
+export async function POST(req: Request) {
+    return handleClearPracticeStats(req);
+}
+
+async function handleClearPracticeStats(req: Request) {
     const session = await getServerSession(authOptions);
 
     if (!session || !session.user) {

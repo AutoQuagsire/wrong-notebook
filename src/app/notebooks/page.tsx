@@ -67,7 +67,7 @@ export default function NotebooksPage() {
         if (!confirm((t.notebooks?.deleteConfirm || "Are you sure?").replace("{name}", name))) return;
 
         try {
-            await apiClient.delete(`/api/notebooks/${id}`);
+            await apiClient.post(`/api/notebooks/${id}`, {});
             await fetchNotebooks();
         } catch (err: unknown) {
             const error = err as { data?: { message?: string }; message?: string };
