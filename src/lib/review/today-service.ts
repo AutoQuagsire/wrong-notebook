@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { addStudyDays, getStudyDayEnd, getStudyDayStart, getStudyDayStartForDue } from "@/lib/review/study-day";
 import type { ReviewTodayItem, ReviewTodayResponse, UpcomingReviewDay } from "@/types/api";
 
 type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
@@ -39,14 +40,10 @@ function mathAwareTruncate(raw: string, maxLen: number): string {
     while ((match = closePattern.exec(raw)) !== null) {
         // Check if we are inside a math block before this close.
         // Open delimiters before this close, after bestCut.
-        const before = raw.slice(bestCut, match.index);
-        const openCount = (before.match(/\$[^$]|\$\$|\$\$|\\\\\(|\\\\\[|\\begin\{[^}]+\}/g) || []).length;
         // Simple heuristic: if there were more opens than closes between
         // bestCut and the closing delimiter, use this close as the cut.
         // We just extend past any closing that follows an unmatched open.
         const seg = raw.slice(0, match.index + match[0].length);
-        const dollarOpens = (seg.match(/(?<!\\)\$(?!\$)/g) || []).length;
-        const dollarCloses = (seg.match(/(?<!\\)\$(?!\$)/g) || []).length;
 
         // For each potential close, check if the segment up to it is balanced.
         // If not, extend; if yes, we can cut here.
@@ -123,12 +120,13 @@ export async function isErrorItemInTodayReviewQueue(
     tx: Pick<PrismaTx, "fsrsCard"> = prisma,
 ): Promise<boolean> {
     const now = new Date();
+    const studyDayEnd = getStudyDayEnd(now);
 
     const card = await tx.fsrsCard.findFirst({
         where: {
             userId,
             errorItemId,
-            due: { lte: now },
+            due: { lt: studyDayEnd },
             errorItem: {
                 masteryLevel: { not: 2 },
             },
@@ -149,7 +147,8 @@ export async function getTodayReviewList(
         MAX_LIMIT,
     );
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const studyDayStart = getStudyDayStart(now);
+    const studyDayEnd = getStudyDayEnd(now);
 
     // Query due FsrsCards joined with ErrorItem.
     // We still select originalImageUrl so buildImageInfo can compute hasImage,
@@ -158,7 +157,7 @@ export async function getTodayReviewList(
     const dueCards = await prisma.fsrsCard.findMany({
         where: {
             userId,
-            due: { lte: now },
+            due: { lt: studyDayEnd },
             errorItem: { masteryLevel: { not: 2 } },
         },
         orderBy: { due: "asc" },
@@ -177,45 +176,47 @@ export async function getTodayReviewList(
         },
     });
 
-    const dueItems: ReviewTodayItem[] = dueCards.map((card) => ({
-        errorItemId: card.errorItemId,
-        fsrsCardId: card.id,
-        subject: card.errorItem.subject,
-        questionPreview: buildQuestionPreview(
-            card.errorItem.questionText,
-            card.errorItem.ocrText,
-        ),
-        ...buildImageInfo(card.errorItemId, card.errorItem.originalImageUrl),
-        due: card.due.toISOString(),
-        lastReview: card.last_review?.toISOString() ?? null,
-        reps: card.reps,
-        lapses: card.lapses,
-        state: card.state,
-        scheduledDays: card.scheduled_days,
-        overdueDays: card.due < todayStart
-            ? computeOverdueDays(card.due, todayStart)
-            : 0,
-    }));
+    const dueItems: ReviewTodayItem[] = dueCards.map((card) => {
+        const dueStudyDayStart = getStudyDayStartForDue(card.due);
+        return {
+            errorItemId: card.errorItemId,
+            fsrsCardId: card.id,
+            subject: card.errorItem.subject,
+            questionPreview: buildQuestionPreview(
+                card.errorItem.questionText,
+                card.errorItem.ocrText,
+            ),
+            ...buildImageInfo(card.errorItemId, card.errorItem.originalImageUrl),
+            due: card.due.toISOString(),
+            lastReview: card.last_review?.toISOString() ?? null,
+            reps: card.reps,
+            lapses: card.lapses,
+            state: card.state,
+            scheduledDays: card.scheduled_days,
+            overdueDays: dueStudyDayStart < studyDayStart
+                ? computeOverdueDays(dueStudyDayStart, studyDayStart)
+                : 0,
+        };
+    });
 
     // Stats: count all due cards (ignoring limit)
     // Exclude mastered items from all counts.
     const [totalDueCount, overdueCount] = await Promise.all([
         prisma.fsrsCard.count({
-            where: { userId, due: { lte: now }, errorItem: { masteryLevel: { not: 2 } } },
+            where: { userId, due: { lt: studyDayEnd }, errorItem: { masteryLevel: { not: 2 } } },
         }),
         prisma.fsrsCard.count({
-            where: { userId, due: { lt: todayStart }, errorItem: { masteryLevel: { not: 2 } } },
+            where: { userId, due: { lt: studyDayStart }, errorItem: { masteryLevel: { not: 2 } } },
         }),
     ]);
 
-    // Upcoming: FsrsCards due in the next 7 days (today through today+6)
-    const dayPlus7Start = new Date(todayStart);
-    dayPlus7Start.setDate(dayPlus7Start.getDate() + 7);
+    // Upcoming: FsrsCards due in the next 7 study days after the current study day.
+    const upcomingEnd = addStudyDays(now, 8);
 
     const upcomingCards = await prisma.fsrsCard.findMany({
         where: {
             userId,
-            due: { gte: todayStart, lt: dayPlus7Start },
+            due: { gte: studyDayEnd, lt: upcomingEnd },
             errorItem: { masteryLevel: { not: 2 } },
         },
         select: { due: true },
@@ -223,12 +224,12 @@ export async function getTodayReviewList(
 
     const countByDate = new Map<string, number>();
     for (const card of upcomingCards) {
-        const dateKey = formatLocalDate(card.due);
+        const dateKey = formatLocalDate(getStudyDayStartForDue(card.due));
         countByDate.set(dateKey, (countByDate.get(dateKey) ?? 0) + 1);
     }
 
     const upcoming: UpcomingReviewDay[] = [];
-    const cursor = new Date(todayStart);
+    const cursor = new Date(studyDayEnd);
     for (let i = 0; i < 7; i++) {
         const key = formatLocalDate(cursor);
         upcoming.push({ date: key, count: countByDate.get(key) ?? 0 });

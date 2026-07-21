@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { createNewCard, validateFsrsRating } from "./adapter";
 import type { FsrsCardData } from "./adapter";
 import type { PrismaClient } from "@prisma/client";
+import { addStudyDays } from "@/lib/review/study-day";
 
 type PrismaTx = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">;
 
@@ -174,10 +175,7 @@ export async function processFsrsReview(
         }
     }
 
-    // Compute due date: now + scheduledDays, set to 06:00 local time
-    const due = new Date(now);
-    due.setDate(due.getDate() + scheduledDays);
-    due.setHours(6, 0, 0, 0);
+    const due = addStudyDays(now, scheduledDays);
 
     const nextCard: FsrsCardData = {
         due,

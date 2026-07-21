@@ -2,7 +2,7 @@
  * FSRS service integration tests
  * Tests database-backed service functions with mocked Prisma.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     mockFsrsCard: {
@@ -29,8 +29,30 @@ describe("FSRS Service", () => {
     const userId = "user-123";
     const errorItemId = "error-item-abc";
 
+    function localDate(
+        year: number,
+        month: number,
+        day: number,
+        hour: number,
+        minute = 0,
+    ): Date {
+        return new Date(year, month - 1, day, hour, minute, 0, 0);
+    }
+
+    function localIso(date: Date): string {
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hour = String(date.getHours()).padStart(2, "0");
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        return `${date.getFullYear()}-${month}-${day} ${hour}:${minute}`;
+    }
+
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     describe("getOrCreateFsrsCard", () => {
@@ -271,6 +293,8 @@ describe("FSRS Service", () => {
     describe("fixed-interval scheduling", () => {
         beforeEach(() => {
             vi.clearAllMocks();
+            vi.useFakeTimers();
+            vi.setSystemTime(localDate(2026, 7, 22, 10, 0));
             mocks.mockFsrsCard.findUnique.mockResolvedValue(null);
             mocks.mockFsrsCard.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
                 id: "card-fixed",
@@ -282,11 +306,18 @@ describe("FSRS Service", () => {
         });
 
         function expectDueDate(due: Date, daysFromNow: number) {
-            const expected = new Date();
-            expected.setDate(expected.getDate() + daysFromNow);
-            expected.setHours(6, 0, 0, 0);
-            expect(due.getTime()).toBe(expected.getTime());
+            const expected = localDate(2026, 7, 22 + daysFromNow, 6, 0);
+            expect(localIso(due)).toBe(localIso(expected));
         }
+
+        it("02:00 评分属于上一学习日，Again 应排到当天 06:00", async () => {
+            vi.setSystemTime(localDate(2026, 7, 22, 2, 0));
+
+            const result = await processFsrsReview(userId, errorItemId, 1);
+
+            expect(result.scheduled_days).toBe(1);
+            expect(localIso(result.due)).toBe("2026-07-22 06:00");
+        });
 
         // Test 1: Again → scheduled_days=1, due 1 day later 06:00
         it("Again (1) → scheduled_days=1, due 1 day later at 06:00", async () => {

@@ -6,6 +6,7 @@ import {
     default_w,
 } from "ts-fsrs";
 import type { Card, Grade } from "ts-fsrs";
+import { getStudyDayEnd, getStudyDayStartForDue } from "@/lib/review/study-day";
 
 export interface FsrsCardData {
     due: Date;
@@ -123,25 +124,24 @@ export function computeNextCard(card: FsrsCardData, rating: number, now: Date): 
     return toFsrsCardData(result.card);
 }
 
+export function normalizeDueToNextStudyDay(card: FsrsCardData, now: Date): FsrsCardData {
+    const normalizedDue = getStudyDayStartForDue(card.due);
+    const earliestAllowedDue = getStudyDayEnd(now);
+    const due = normalizedDue < earliestAllowedDue ? earliestAllowedDue : normalizedDue;
+
+    return {
+        ...card,
+        due,
+        scheduled_days: due.getTime() !== card.due.getTime()
+            ? Math.max(1, card.scheduled_days)
+            : card.scheduled_days,
+    };
+}
+
 /**
- * Clamp a due date so it never lands on the same calendar day as "now".
- * If FSRS schedules the next review for today (minutes/hours later),
- * push it to tomorrow 06:00 local time and ensure scheduledDays >= 1.
+ * Backwards-compatible export name for knowledge review scheduling.
+ * Uses the shared 06:00 study-day boundary instead of calendar-day logic.
  */
 export function clampDueToNextDay(card: FsrsCardData, now: Date): FsrsCardData {
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(6, 0, 0, 0);
-
-    const due = new Date(card.due);
-
-    if (due < tomorrow) {
-        return {
-            ...card,
-            due: tomorrow,
-            scheduled_days: Math.max(1, card.scheduled_days),
-        };
-    }
-
-    return card;
+    return normalizeDueToNextStudyDay(card, now);
 }

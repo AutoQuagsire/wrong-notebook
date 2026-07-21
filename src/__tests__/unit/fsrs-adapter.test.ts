@@ -12,6 +12,24 @@ import {
 import type { FsrsCardData } from "@/lib/fsrs/adapter";
 
 describe("FSRS Adapter", () => {
+    function localDate(
+        year: number,
+        month: number,
+        day: number,
+        hour: number,
+        minute = 0,
+    ): Date {
+        return new Date(year, month - 1, day, hour, minute, 0, 0);
+    }
+
+    function localIso(date: Date): string {
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hour = String(date.getHours()).padStart(2, "0");
+        const minute = String(date.getMinutes()).padStart(2, "0");
+        return `${date.getFullYear()}-${month}-${day} ${hour}:${minute}`;
+    }
+
     describe("createNewCard", () => {
         it("应该创建状态为 New 的新卡", () => {
             const card = createNewCard();
@@ -167,60 +185,52 @@ describe("FSRS Adapter", () => {
             };
         }
 
-        it("due 在今天几分钟后时应钳制到明天 06:00", () => {
-            const now = new Date("2026-06-22T10:00:00Z");
-            // due is 30 minutes from now — same day
-            const card = makeCard({ due: new Date("2026-06-22T10:30:00Z") });
+        it("due 在当前学习日内时应钳制到下一学习日 06:00", () => {
+            const now = localDate(2026, 6, 22, 10, 0);
+            const card = makeCard({ due: localDate(2026, 6, 22, 10, 30) });
             const result = clampDueToNextDay(card, now);
 
-            // Should be tomorrow
-            const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(6, 0, 0, 0);
-            expect(result.due.toISOString()).toBe(tomorrow.toISOString());
+            expect(localIso(result.due)).toBe("2026-06-23 06:00");
             expect(result.scheduled_days).toBeGreaterThanOrEqual(1);
         });
 
-        it("due 在今天凌晨（已经过了 00:00 但仍是今天）应钳制到明天", () => {
-            const now = new Date("2026-06-22T10:00:00Z");
-            const card = makeCard({ due: new Date("2026-06-22T00:30:00Z") });
+        it("due 在下一自然日凌晨但仍属当前学习日时应钳制到下一学习日", () => {
+            const now = localDate(2026, 6, 22, 10, 0);
+            const card = makeCard({ due: localDate(2026, 6, 23, 2, 0) });
             const result = clampDueToNextDay(card, now);
 
-            const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(6, 0, 0, 0);
-            expect(result.due.toISOString()).toBe(tomorrow.toISOString());
+            expect(localIso(result.due)).toBe("2026-06-23 06:00");
         });
 
-        it("due 已经在明天时不应修改", () => {
-            const now = new Date("2026-06-22T10:00:00Z");
-            const card = makeCard({ due: new Date("2026-06-23T12:00:00Z"), scheduled_days: 3 });
+        it("due 已经在下一学习日中时应归一到该学习日 06:00", () => {
+            const now = localDate(2026, 6, 22, 10, 0);
+            const card = makeCard({ due: localDate(2026, 6, 23, 12, 0), scheduled_days: 3 });
             const result = clampDueToNextDay(card, now);
 
-            expect(result.due.toISOString()).toBe("2026-06-23T12:00:00.000Z");
+            expect(localIso(result.due)).toBe("2026-06-23 06:00");
             expect(result.scheduled_days).toBe(3);
         });
 
-        it("due 在更远的未来时不应修改", () => {
-            const now = new Date("2026-06-22T10:00:00Z");
-            const card = makeCard({ due: new Date("2026-07-01T12:00:00Z"), scheduled_days: 10 });
+        it("due 在更远的未来时应归一到对应学习日 06:00", () => {
+            const now = localDate(2026, 6, 22, 10, 0);
+            const card = makeCard({ due: localDate(2026, 7, 1, 12, 0), scheduled_days: 10 });
             const result = clampDueToNextDay(card, now);
 
-            expect(result.due.toISOString()).toBe("2026-07-01T12:00:00.000Z");
+            expect(localIso(result.due)).toBe("2026-07-01 06:00");
             expect(result.scheduled_days).toBe(10);
         });
 
         it("钳制后 scheduled_days 至少为 1", () => {
-            const now = new Date("2026-06-22T10:00:00Z");
-            const card = makeCard({ due: new Date("2026-06-22T10:30:00Z"), scheduled_days: 0 });
+            const now = localDate(2026, 6, 22, 10, 0);
+            const card = makeCard({ due: localDate(2026, 6, 22, 10, 30), scheduled_days: 0 });
             const result = clampDueToNextDay(card, now);
 
             expect(result.scheduled_days).toBe(1);
         });
 
         it("不应变异输入 card", () => {
-            const now = new Date("2026-06-22T10:00:00Z");
-            const card = makeCard({ due: new Date("2026-06-22T10:30:00Z"), scheduled_days: 0 });
+            const now = localDate(2026, 6, 22, 10, 0);
+            const card = makeCard({ due: localDate(2026, 6, 22, 10, 30), scheduled_days: 0 });
             const originalDue = card.due.toISOString();
             const originalScheduledDays = card.scheduled_days;
 

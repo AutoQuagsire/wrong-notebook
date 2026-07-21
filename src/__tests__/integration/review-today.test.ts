@@ -1,7 +1,7 @@
 /**
  * GET /api/review/today 集成测试
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
     mockFsrsCard: {
@@ -51,6 +51,16 @@ const mockErrorItemData = (id: string, subjectName = "数学") => ({
     subject: { id: `subj-${subjectName}`, name: subjectName },
 });
 
+function localDate(
+    year: number,
+    month: number,
+    day: number,
+    hour: number,
+    minute = 0,
+): Date {
+    return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
 describe("GET /api/review/today", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -60,6 +70,10 @@ describe("GET /api/review/today", () => {
         mocks.mockFsrsCard.count.mockResolvedValue(0);
         mocks.mockErrorItem.findMany.mockResolvedValue([]);
         mocks.mockErrorItem.count.mockResolvedValue(0);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     describe("authentication", () => {
@@ -76,6 +90,21 @@ describe("GET /api/review/today", () => {
     });
 
     describe("due items", () => {
+        it("按当前学习日结束时间一次性纳入今日到期卡", async () => {
+            vi.useFakeTimers();
+            vi.setSystemTime(localDate(2026, 7, 22, 6, 1));
+
+            mocks.mockFsrsCard.findMany.mockResolvedValue([]);
+
+            const req = new Request("http://localhost/api/review/today");
+            await GET(req);
+
+            const dueCall = mocks.mockFsrsCard.findMany.mock.calls[0][0] as {
+                where: { due: { lt: Date } };
+            };
+            expect(dueCall.where.due.lt.getTime()).toBe(localDate(2026, 7, 23, 6, 0).getTime());
+        });
+
         it("应返回 due <= now 的错题", async () => {
             mocks.mockFsrsCard.findMany.mockResolvedValue([
                 {
@@ -449,14 +478,18 @@ describe("GET /api/review/today", () => {
     });
 
     describe("overdueDays", () => {
-        it("昨天到期的卡 overdueDays 应为 1", async () => {
+        it("上一学习日到期的卡 overdueDays 应为 1", async () => {
+            vi.useFakeTimers();
+            vi.setSystemTime(localDate(2026, 7, 22, 6, 1));
+            const previousStudyDay = localDate(2026, 7, 21, 6, 0);
+
             mocks.mockFsrsCard.findMany.mockResolvedValue([
                 {
                     id: "card-1",
                     userId: "user-123",
                     errorItemId: "err-1",
-                    due: yesterday,
-                    last_review: yesterday,
+                    due: previousStudyDay,
+                    last_review: previousStudyDay,
                     reps: 2,
                     lapses: 0,
                     state: "Review",
@@ -499,14 +532,17 @@ describe("GET /api/review/today", () => {
     });
 
     describe("upcoming", () => {
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const tomorrow = new Date(today.getTime() + 86400000);
-        const day2 = new Date(today.getTime() + 2 * 86400000);
-        const day3 = new Date(today.getTime() + 3 * 86400000);
-        const day8 = new Date(today.getTime() + 8 * 86400000);
+        const currentStudyDay = localDate(2026, 7, 22, 6, 0);
+        const nextStudyDay = localDate(2026, 7, 23, 6, 0);
+        const nextStudyDayDawn = localDate(2026, 7, 24, 2, 0);
+        const day2 = localDate(2026, 7, 24, 6, 0);
+        const day3 = localDate(2026, 7, 25, 6, 0);
+        const day8 = localDate(2026, 7, 31, 6, 0);
 
         beforeEach(() => {
             vi.clearAllMocks();
+            vi.useFakeTimers();
+            vi.setSystemTime(localDate(2026, 7, 22, 10, 0));
             vi.mocked(getServerSession).mockResolvedValue(mocks.mockSession);
         });
 
@@ -549,9 +585,8 @@ describe("GET /api/review/today", () => {
             setupMocks(
                 [],
                 [
-                    { due: today },
-                    { due: tomorrow },
-                    { due: tomorrow },
+                    { due: nextStudyDay },
+                    { due: nextStudyDayDawn },
                     { due: day2 },
                     { due: day3 },
                     { due: day3 },
@@ -565,20 +600,19 @@ describe("GET /api/review/today", () => {
             const data = await res.json();
 
             const upcoming = data.stats.upcoming;
-            expect(upcoming[0].count).toBe(1); // today
-            expect(upcoming[1].count).toBe(2); // tomorrow
-            expect(upcoming[2].count).toBe(1); // day2
-            expect(upcoming[3].count).toBe(3); // day3
+            expect(upcoming[0].count).toBe(2); // next study day
+            expect(upcoming[1].count).toBe(1); // day2
+            expect(upcoming[2].count).toBe(3); // day3
+            expect(upcoming[3].count).toBe(0);
             expect(upcoming[4].count).toBe(0);
             expect(upcoming[5].count).toBe(0);
-            expect(upcoming[6].count).toBe(0);
         });
 
         it("不应统计 7 天之外的卡", async () => {
             setupMocks(
                 [],
                 [
-                    { due: today },
+                    { due: nextStudyDay },
                     { due: day8 },
                 ],
                 0, 0, 0
@@ -610,14 +644,12 @@ describe("GET /api/review/today", () => {
             }
         });
 
-        it("upcoming 应包含已逾期的卡（在今天窗口内）", async () => {
-            const yesterdayCard = new Date(today.getTime() - 86400000);
-
+        it("upcoming 不应包含当前学习日和已逾期的卡", async () => {
             setupMocks(
                 [],
                 [
-                    { due: yesterdayCard },
-                    { due: tomorrow },
+                    { due: currentStudyDay },
+                    { due: nextStudyDay },
                 ],
                 0, 0, 0
             );
@@ -626,14 +658,11 @@ describe("GET /api/review/today", () => {
             const res = await GET(req);
             const data = await res.json();
 
-            // Yesterday's card is < todayStart, so it should NOT be in upcoming
-            // Only tomorrow's card should be in upcoming[1]
-            // Actually, the query uses `due >= todayStart`, so yesterday is excluded
             let totalUpcoming = 0;
             for (const day of data.stats.upcoming) {
                 totalUpcoming += day.count;
             }
-            expect(totalUpcoming).toBe(1); // only tomorrow
+            expect(totalUpcoming).toBe(1); // only next study day
         });
 
         it("upcoming 不应影响现有 dueItems/newItems/stats", async () => {
@@ -836,7 +865,6 @@ describe("GET /api/review/today", () => {
 
             const req = new Request("http://localhost/api/review/today");
             const res = await GET(req);
-            const data = await res.json();
 
             expect(res.status).toBe(200);
 
@@ -859,7 +887,6 @@ describe("GET /api/review/today", () => {
 
             const req = new Request("http://localhost/api/review/today?includeNew=true");
             const res = await GET(req);
-            const data = await res.json();
 
             expect(res.status).toBe(200);
 
@@ -881,7 +908,6 @@ describe("GET /api/review/today", () => {
 
             const req = new Request("http://localhost/api/review/today");
             const res = await GET(req);
-            const data = await res.json();
 
             expect(res.status).toBe(200);
 

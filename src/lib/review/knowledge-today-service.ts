@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { addStudyDays, getStudyDayEnd, getStudyDayStart, getStudyDayStartForDue } from "@/lib/review/study-day";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -62,7 +63,8 @@ export async function getKnowledgeTodayReviewList(
 ): Promise<KnowledgeTodayResult> {
     const effectiveLimit = Math.min(Math.max(1, limit ?? DEFAULT_LIMIT), MAX_LIMIT);
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const studyDayStart = getStudyDayStart(now);
+    const studyDayEnd = getStudyDayEnd(now);
 
     const knowledgeItemWhere: Record<string, unknown> = { userId };
     if (subjectId) knowledgeItemWhere.subjectId = subjectId;
@@ -72,7 +74,7 @@ export async function getKnowledgeTodayReviewList(
     const dueStates = await prisma.knowledgeReviewState.findMany({
         where: {
             userId,
-            due: { lte: now },
+            due: { lt: studyDayEnd },
             knowledgeItem: knowledgeItemWhere,
         },
         orderBy: { due: "asc" },
@@ -91,42 +93,44 @@ export async function getKnowledgeTodayReviewList(
         },
     });
 
-    const dueItems: KnowledgeReviewTodayItem[] = dueStates.map((s) => ({
-        knowledgeItemId: s.knowledgeItemId,
-        reviewStateId: s.id,
-        promptPreview: buildPromptPreview(s.knowledgeItem.prompt),
-        answer: s.knowledgeItem.answer,
-        detail: s.knowledgeItem.detail,
-        source: s.knowledgeItem.source,
-        subject: s.knowledgeItem.subject,
-        tag: s.knowledgeItem.tag,
-        due: s.due.toISOString(),
-        lastReview: s.last_review?.toISOString() ?? null,
-        reps: s.reps,
-        lapses: s.lapses,
-        state: s.state,
-        scheduledDays: s.scheduled_days,
-        overdueDays: s.due < todayStart ? computeOverdueDays(s.due, todayStart) : 0,
-    }));
+    const dueItems: KnowledgeReviewTodayItem[] = dueStates.map((s) => {
+        const dueStudyDayStart = getStudyDayStartForDue(s.due);
+        return {
+            knowledgeItemId: s.knowledgeItemId,
+            reviewStateId: s.id,
+            promptPreview: buildPromptPreview(s.knowledgeItem.prompt),
+            answer: s.knowledgeItem.answer,
+            detail: s.knowledgeItem.detail,
+            source: s.knowledgeItem.source,
+            subject: s.knowledgeItem.subject,
+            tag: s.knowledgeItem.tag,
+            due: s.due.toISOString(),
+            lastReview: s.last_review?.toISOString() ?? null,
+            reps: s.reps,
+            lapses: s.lapses,
+            state: s.state,
+            scheduledDays: s.scheduled_days,
+            overdueDays: dueStudyDayStart < studyDayStart ? computeOverdueDays(dueStudyDayStart, studyDayStart) : 0,
+        };
+    });
 
     // Stats
     const [totalDueCount, overdueCount] = await Promise.all([
         prisma.knowledgeReviewState.count({
-            where: { userId, due: { lte: now }, knowledgeItem: knowledgeItemWhere },
+            where: { userId, due: { lt: studyDayEnd }, knowledgeItem: knowledgeItemWhere },
         }),
         prisma.knowledgeReviewState.count({
-            where: { userId, due: { lt: todayStart }, knowledgeItem: knowledgeItemWhere },
+            where: { userId, due: { lt: studyDayStart }, knowledgeItem: knowledgeItemWhere },
         }),
     ]);
 
     // Upcoming
-    const dayPlus7Start = new Date(todayStart);
-    dayPlus7Start.setDate(dayPlus7Start.getDate() + 7);
+    const upcomingEnd = addStudyDays(now, 8);
 
     const upcomingStates = await prisma.knowledgeReviewState.findMany({
         where: {
             userId,
-            due: { gte: todayStart, lt: dayPlus7Start },
+            due: { gte: studyDayEnd, lt: upcomingEnd },
             knowledgeItem: knowledgeItemWhere,
         },
         select: { due: true },
@@ -134,12 +138,12 @@ export async function getKnowledgeTodayReviewList(
 
     const countByDate = new Map<string, number>();
     for (const s of upcomingStates) {
-        const key = formatLocalDate(s.due);
+        const key = formatLocalDate(getStudyDayStartForDue(s.due));
         countByDate.set(key, (countByDate.get(key) ?? 0) + 1);
     }
 
     const upcoming: { date: string; count: number }[] = [];
-    const cursor = new Date(todayStart);
+    const cursor = new Date(studyDayEnd);
     for (let i = 0; i < 7; i++) {
         const key = formatLocalDate(cursor);
         upcoming.push({ date: key, count: countByDate.get(key) ?? 0 });

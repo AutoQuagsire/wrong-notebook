@@ -1,7 +1,7 @@
 /**
  * GET /api/knowledge/review/today integration tests
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GET } from "@/app/api/knowledge/review/today/route";
 import { getServerSession } from "next-auth";
 
@@ -28,6 +28,16 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("next-auth");
 vi.mock("@/lib/auth", () => ({ authOptions: {} }));
 
+function localDate(
+    year: number,
+    month: number,
+    day: number,
+    hour: number,
+    minute = 0,
+): Date {
+    return new Date(year, month - 1, day, hour, minute, 0, 0);
+}
+
 describe("GET /api/knowledge/review/today", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -39,6 +49,10 @@ describe("GET /api/knowledge/review/today", () => {
         mocks.mockPrismaKnowledgeReviewState.count.mockResolvedValue(0);
         mocks.mockPrismaKnowledgeItem.findMany.mockResolvedValue([]);
         mocks.mockPrismaKnowledgeItem.count.mockResolvedValue(0);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     function reqWithParams(params: string) {
@@ -57,6 +71,28 @@ describe("GET /api/knowledge/review/today", () => {
         const data = await res.json();
         expect(data.dueItems).toEqual([]);
         expect(data.newItems).toEqual([]);
+    });
+
+    it("uses the current study-day end for due items and counts", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(localDate(2026, 7, 22, 10, 0));
+
+        const res = await GET(reqWithParams(""));
+        expect(res.status).toBe(200);
+
+        const dueFindCall = mocks.mockPrismaKnowledgeReviewState.findMany.mock.calls[0][0] as {
+            where: { due: { lt: Date } };
+        };
+        const dueCountCall = mocks.mockPrismaKnowledgeReviewState.count.mock.calls[0][0] as {
+            where: { due: { lt: Date } };
+        };
+        const overdueCountCall = mocks.mockPrismaKnowledgeReviewState.count.mock.calls[1][0] as {
+            where: { due: { lt: Date } };
+        };
+
+        expect(dueFindCall.where.due.lt.getTime()).toBe(localDate(2026, 7, 23, 6, 0).getTime());
+        expect(dueCountCall.where.due.lt.getTime()).toBe(localDate(2026, 7, 23, 6, 0).getTime());
+        expect(overdueCountCall.where.due.lt.getTime()).toBe(localDate(2026, 7, 22, 6, 0).getTime());
     });
 
     it("returns newItems when includeNew=true", async () => {

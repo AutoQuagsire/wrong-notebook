@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { createNewCard, computeNextCard, validateFsrsRating, clampDueToNextDay } from "./adapter";
+import { createNewCard, computeNextCard, validateFsrsRating, normalizeDueToNextStudyDay } from "./adapter";
 import type { FsrsCardData } from "./adapter";
 import type { PrismaClient } from "@prisma/client";
 
@@ -153,7 +153,7 @@ export async function processKnowledgeReview(
 
     const computedCard = computeNextCard(card, rating, now);
 
-    const nextCard = clampDueToNextDay(computedCard, now);
+    const nextCard = normalizeDueToNextStudyDay(computedCard, now);
 
     await saveKnowledgeReviewState(card.id, nextCard, tx);
 

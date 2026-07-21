@@ -1,7 +1,7 @@
 /**
  * POST /api/knowledge/review/submit 集成测试
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { POST } from "@/app/api/knowledge/review/submit/route";
 import { getServerSession } from "next-auth";
 
@@ -27,13 +27,19 @@ const mocks = vi.hoisted(() => ({
     },
 }));
 
+type KnowledgeReviewSubmitTx = {
+    knowledgeItem: typeof mocks.mockPrismaKnowledgeItem;
+    knowledgeReviewState: typeof mocks.mockPrismaKnowledgeReviewState;
+    knowledgeReviewLog: typeof mocks.mockPrismaKnowledgeReviewLog;
+};
+
 vi.mock("@/lib/prisma", () => ({
     prisma: {
         user: mocks.mockPrismaUser,
         knowledgeItem: mocks.mockPrismaKnowledgeItem,
         knowledgeReviewState: mocks.mockPrismaKnowledgeReviewState,
         knowledgeReviewLog: mocks.mockPrismaKnowledgeReviewLog,
-        $transaction: vi.fn(async (fn: Function) => {
+        $transaction: vi.fn(async (fn: (tx: KnowledgeReviewSubmitTx) => unknown) => {
             return fn({
                 knowledgeItem: mocks.mockPrismaKnowledgeItem,
                 knowledgeReviewState: mocks.mockPrismaKnowledgeReviewState,
@@ -68,6 +74,20 @@ describe("POST /api/knowledge/review/submit", () => {
         });
     });
 
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    function localDate(
+        year: number,
+        month: number,
+        day: number,
+        hour: number,
+        minute = 0,
+    ): Date {
+        return new Date(year, month - 1, day, hour, minute, 0, 0);
+    }
+
     function buildRequest(body: Record<string, unknown>) {
         return new Request("http://localhost/api/knowledge/review/submit", {
             method: "POST",
@@ -85,7 +105,9 @@ describe("POST /api/knowledge/review/submit", () => {
         });
 
         it("returns 401 when user email missing", async () => {
-            vi.mocked(getServerSession).mockResolvedValue({ user: { id: "x" } } as any);
+            vi.mocked(getServerSession).mockResolvedValue(
+                { user: { id: "x" } } as unknown as Awaited<ReturnType<typeof getServerSession>>,
+            );
             const req = buildRequest({ knowledgeItemId: "ki-1", rating: 3 });
             const res = await POST(req);
             expect(res.status).toBe(401);
@@ -210,6 +232,22 @@ describe("POST /api/knowledge/review/submit", () => {
             expect(data.reviewResult).toBeDefined();
             expect(data.reviewResult.nextReviewAt).toBeDefined();
             expect(data.reviewResult.state).toBeDefined();
+        });
+
+        it("normalizes nextReviewAt to the next study-day boundary", async () => {
+            vi.useFakeTimers();
+            vi.setSystemTime(localDate(2026, 7, 22, 10, 0));
+
+            const req = buildRequest({ knowledgeItemId: "ki-1", rating: 1 });
+            const res = await POST(req);
+            expect(res.status).toBe(200);
+
+            const updateCall = mocks.mockPrismaKnowledgeReviewState.update.mock.calls[0][0] as {
+                data: { due: Date; stability: number | null; difficulty: number | null };
+            };
+            expect(updateCall.data.due.getTime()).toBe(localDate(2026, 7, 23, 6, 0).getTime());
+            expect(updateCall.data.stability).not.toBeUndefined();
+            expect(updateCall.data.difficulty).not.toBeUndefined();
         });
 
         it("returns 200 with isCorrect false for rating 1", async () => {
